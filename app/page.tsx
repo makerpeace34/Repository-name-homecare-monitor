@@ -10,6 +10,7 @@ type VitalRecord = {
   patient: string;
   date: string;
   time: string;
+  enteredBy: string;
   bp: string;
   heartRate: string;
   spo2: string;
@@ -503,6 +504,7 @@ async function loadRecords() {
       urine_output,
       progress_note,
       recorded_at,
+      recorded_by,
       patients (
         patient_code,
         first_name,
@@ -518,81 +520,127 @@ async function loadRecords() {
     return;
   }
 
-  const formattedRecords: VitalRecord[] = (data || []).map(
-    (record: any) => {
-      const recordedDate = new Date(record.recorded_at);
-
-      const patientData = Array.isArray(record.patients)
-        ? record.patients[0]
-        : record.patients;
-
-      const patientName = patientData
-        ? `${patientData.patient_code} - ${patientData.first_name} ${patientData.last_name}`
-        : "Unknown Patient";
-
-      const bloodPressure =
-        record.systolic !== null &&
-        record.diastolic !== null
-          ? `${record.systolic}/${record.diastolic}`
-          : record.systolic !== null
-          ? `${record.systolic}/—`
-          : record.diastolic !== null
-          ? `—/${record.diastolic}`
-          : "—";
-
-      return {
-        id: record.id,
-        patientId: record.patient_id,
-        patient: patientName,
-
-        date: recordedDate.toLocaleDateString(
-          undefined,
-          {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          }
-        ),
-
-        time: recordedDate.toLocaleTimeString(
-          undefined,
-          {
-            hour: "numeric",
-            minute: "2-digit",
-          }
-        ),
-
-        bp: bloodPressure,
-
-        heartRate:
-          record.heart_rate !== null
-            ? String(record.heart_rate)
-            : "—",
-
-        spo2:
-          record.spo2 !== null
-            ? String(record.spo2)
-            : "—",
-
-        temperature:
-          record.temperature !== null
-            ? String(record.temperature)
-            : "—",
-
-        glycemia:
-          record.glycemia !== null
-            ? String(record.glycemia)
-            : "—",
-
-        urineOutput:
-          record.urine_output !== null
-            ? String(record.urine_output)
-            : "—",
-
-        note: record.progress_note || "—",
-      };
-    }
+  const recorderIds = Array.from(
+    new Set(
+      (data || [])
+        .map((record: any) => record.recorded_by)
+        .filter(Boolean)
+    )
   );
+
+  const recorderNames: Record<string, string> = {};
+
+  if (recorderIds.length > 0) {
+    const {
+      data: recorderProfiles,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", recorderIds);
+
+    if (profileError) {
+      console.error(
+        "Error loading staff names:",
+        profileError
+      );
+    } else {
+      (recorderProfiles || []).forEach(
+        (staff: any) => {
+          const fullName =
+            staff.full_name?.trim() || "";
+
+          recorderNames[staff.id] =
+            fullName.split(/\s+/)[0] ||
+            "Unknown";
+        }
+      );
+    }
+  }
+
+  const formattedRecords: VitalRecord[] = (
+    data || []
+  ).map((record: any) => {
+    const recordedDate = new Date(
+      record.recorded_at
+    );
+
+    const patientData = Array.isArray(
+      record.patients
+    )
+      ? record.patients[0]
+      : record.patients;
+
+    const patientName = patientData
+      ? `${patientData.patient_code} - ${patientData.first_name} ${patientData.last_name}`
+      : "Unknown Patient";
+
+    const bloodPressure =
+      record.systolic !== null &&
+      record.diastolic !== null
+        ? `${record.systolic}/${record.diastolic}`
+        : record.systolic !== null
+        ? `${record.systolic}/—`
+        : record.diastolic !== null
+        ? `—/${record.diastolic}`
+        : "—";
+
+    return {
+      id: record.id,
+      patientId: record.patient_id,
+      patient: patientName,
+
+      date: recordedDate.toLocaleDateString(
+        undefined,
+        {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        }
+      ),
+
+      time: recordedDate.toLocaleTimeString(
+        undefined,
+        {
+          hour: "numeric",
+          minute: "2-digit",
+        }
+      ),
+
+      enteredBy:
+        recorderNames[record.recorded_by] ||
+        "Unknown",
+
+      bp: bloodPressure,
+
+      heartRate:
+        record.heart_rate !== null
+          ? String(record.heart_rate)
+          : "—",
+
+      spo2:
+        record.spo2 !== null
+          ? String(record.spo2)
+          : "—",
+
+      temperature:
+        record.temperature !== null
+          ? String(record.temperature)
+          : "—",
+
+      glycemia:
+        record.glycemia !== null
+          ? String(record.glycemia)
+          : "—",
+
+      urineOutput:
+        record.urine_output !== null
+          ? String(record.urine_output)
+          : "—",
+
+      note: record.progress_note || "—",
+    };
+  });
 
   setRecords(formattedRecords);
   setRecordsLoading(false);
@@ -1747,8 +1795,13 @@ async function handleRecordUpdate() {
         patientRecords.map((record) => (
           <tr key={record.id}>
             <td>
-              {record.date} · {record.time}
-            </td>
+  <div>
+    {record.date} · {record.time}
+  </div>
+  <small>
+    By: {record.enteredBy}
+  </small>
+</td>
 
             <td>{record.note}</td>
 
@@ -2590,33 +2643,7 @@ function downloadRecords(
     ]);
   }
 
-  if (mode === "both") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "BP",
-      "Heart Rate",
-      "SpO2",
-      "Temperature",
-      "Glycemia",
-      "Urine Output",
-      "Progress Note",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.bp,
-      record.heartRate,
-      record.spo2,
-      record.temperature,
-      record.glycemia,
-      record.urineOutput,
-      record.note,
-    ]);
-  }
+  
 
   const escapeCsv = (value: string) =>
     `"${String(value ?? "").replace(/"/g, '""')}"`;
