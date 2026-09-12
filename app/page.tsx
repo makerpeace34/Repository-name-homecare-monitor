@@ -1653,15 +1653,14 @@ const [viewPatientId, setViewPatientId] =
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Time</th>
+        <th>Date & Time</th>
+        <th>Progress Note</th>
         <th>BP</th>
         <th>HR</th>
         <th>SpO₂</th>
         <th>Temp</th>
         <th>Glycemia</th>
         <th>UOP</th>
-        <th>Progress Note</th>
       </tr>
     </thead>
 
@@ -1669,56 +1668,52 @@ const [viewPatientId, setViewPatientId] =
       {patientRecords.length > 0 ? (
         patientRecords.map((record) => (
           <tr key={record.id}>
-            <td>{record.date}</td>
+            <td>
+              {record.date} · {record.time}
+            </td>
 
-            <td>{record.time}</td>
+            <td>{record.note}</td>
 
             <td>{record.bp}</td>
 
             <td>
-              {record.heartRate === "—"
-                ? "—"
-                : `${record.heartRate} bpm`}
+              {record.heartRate !== "—"
+                ? `${record.heartRate} bpm`
+                : "—"}
             </td>
 
             <td>
-              {record.spo2 === "—"
-                ? "—"
-                : `${record.spo2}%`}
+              {record.spo2 !== "—"
+                ? `${record.spo2}%`
+                : "—"}
             </td>
 
             <td>
-              {record.temperature === "—"
-                ? "—"
-                : `${record.temperature} °C`}
+              {record.temperature !== "—"
+                ? `${record.temperature} °C`
+                : "—"}
             </td>
 
             <td>
-              {record.glycemia === "—"
-                ? "—"
-                : `${record.glycemia} mg/dL`}
+              {record.glycemia !== "—"
+                ? `${record.glycemia} mg/dL`
+                : "—"}
             </td>
 
             <td>
-              {record.urineOutput === "—"
-                ? "—"
-                : `${record.urineOutput} mL`}
-            </td>
-
-            <td>
-              {record.note === "—"
-                ? "No note"
-                : record.note}
+              {record.urineOutput !== "—"
+                ? `${record.urineOutput} mL`
+                : "—"}
             </td>
           </tr>
         ))
       ) : (
         <tr>
           <td
-            colSpan={9}
+            colSpan={8}
             style={{ textAlign: "center" }}
           >
-            No records found for this patient.
+            No patient records yet.
           </td>
         </tr>
       )}
