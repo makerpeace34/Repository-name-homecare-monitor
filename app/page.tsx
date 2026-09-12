@@ -716,10 +716,11 @@ async function handleSignOut() {
 
         {activePage === "Patients" && (
           <Patients
-            patients={patients}
-            setPatients={setPatients}
-            records={records}
-          />
+  patients={patients}
+  setPatients={setPatients}
+  records={records}
+  onRecordsChanged={loadRecords}
+/>
         )}
 
         {activePage === "Records" && (
@@ -795,8 +796,12 @@ function Dashboard({
       return "—";
     }
 
+    
+
     return `${value} ${unit}`;
   }
+
+  
 
   return (
     <>
@@ -1310,12 +1315,14 @@ function Patients({
   patients,
   setPatients,
   records,
+  onRecordsChanged,
 }: {
   patients: Patient[];
   setPatients: React.Dispatch<
     React.SetStateAction<Patient[]>
   >;
   records: VitalRecord[];
+  onRecordsChanged: () => Promise<void>;
 }) {
   const [showForm, setShowForm] = useState(false);
 
@@ -1324,6 +1331,9 @@ function Patients({
 
 const [viewPatientId, setViewPatientId] =
   useState<string | null>(null);
+
+  const [editingRecord, setEditingRecord] =
+  useState<VitalRecord | null>(null);
 
   const [search, setSearch] = useState("");
 
@@ -1528,6 +1538,73 @@ const [viewPatientId, setViewPatientId] =
     )
   );
 }
+
+async function handleRecordUpdate() {
+  if (!editingRecord) {
+    return;
+  }
+
+  const parseNumber = (value: string) => {
+    if (!value || value === "—") {
+      return null;
+    }
+
+    const numberValue = Number(value);
+
+    return Number.isNaN(numberValue)
+      ? null
+      : numberValue;
+  };
+
+  const bpParts =
+    editingRecord.bp && editingRecord.bp !== "—"
+      ? editingRecord.bp.split("/")
+      : ["", ""];
+
+  const systolic = parseNumber(bpParts[0] || "");
+  const diastolic = parseNumber(bpParts[1] || "");
+
+  const { data, error } = await supabase
+    .from("vital_records")
+    .update({
+      systolic,
+      diastolic,
+      heart_rate: parseNumber(editingRecord.heartRate),
+      spo2: parseNumber(editingRecord.spo2),
+      temperature: parseNumber(editingRecord.temperature),
+      glycemia: parseNumber(editingRecord.glycemia),
+      urine_output: parseNumber(editingRecord.urineOutput),
+      progress_note:
+        editingRecord.note &&
+        editingRecord.note !== "—"
+          ? editingRecord.note.trim()
+          : null,
+    })
+    .eq("id", editingRecord.id)
+    .select();
+
+  if (error) {
+    alert(
+      "Supabase error:\n" +
+        JSON.stringify(error, null, 2)
+    );
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    alert(
+      "The record was not updated. Supabase may be blocking record edits."
+    );
+    return;
+  }
+
+  await onRecordsChanged();
+
+  alert("Patient record updated successfully.");
+
+  setEditingRecord(null);
+}
+
   if (selectedPatient) {
     const patientRecords = records.filter(
       (record) =>
@@ -1661,6 +1738,7 @@ const [viewPatientId, setViewPatientId] =
         <th>Temp</th>
         <th>Glycemia</th>
         <th>UOP</th>
+        <th>Actions</th>
       </tr>
     </thead>
 
@@ -1695,31 +1773,190 @@ const [viewPatientId, setViewPatientId] =
             </td>
 
             <td>
-              {record.glycemia !== "—"
-                ? `${record.glycemia} mg/dL`
-                : "—"}
-            </td>
+        {record.glycemia !== "—"
+  ? `${record.glycemia} mg/dL`
+  : "—"}
+</td>
 
-            <td>
-              {record.urineOutput !== "—"
-                ? `${record.urineOutput} mL`
-                : "—"}
-            </td>
-          </tr>
-        ))
+<td>
+  {record.urineOutput !== "—"
+    ? `${record.urineOutput} mL`
+    : "—"}
+</td>
+
+<td>
+  <button
+    className="tableButton"
+    onClick={() => setEditingRecord(record)}
+  >
+    Edit
+  </button>
+</td>
+</tr>
+))
       ) : (
         <tr>
           <td
-            colSpan={8}
+            colSpan={9}
             style={{ textAlign: "center" }}
           >
             No patient records yet.
           </td>
+          <td>
+  
+</td>
         </tr>
       )}
     </tbody>
   </table>
 </div>
+
+{editingRecord && (
+  <div className="modalOverlay">
+    <div className="modalCard">
+      <div className="panelHeader">
+        <div>
+          <h3>Edit Patient Record</h3>
+          <p>
+            Update vital signs or the progress note.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="closeButton"
+          onClick={() => setEditingRecord(null)}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="patientFormGrid">
+        <div className="field">
+          <label>Blood Pressure</label>
+          <div className="field">
+  <label>Blood Pressure</label>
+  <input
+    value={
+      editingRecord.bp === "—"
+        ? ""
+        : editingRecord.bp
+    }
+    onChange={(event) =>
+      setEditingRecord({
+        ...editingRecord,
+        bp: event.target.value,
+      })
+    }
+    placeholder="120/80"
+  />
+</div>
+        </div>
+
+        <div className="field">
+          <label>Heart Rate</label>
+          <input
+            value={editingRecord.heartRate}
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                heartRate: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="field">
+          <label>SpO₂</label>
+          <input
+            value={editingRecord.spo2}
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                spo2: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="field">
+          <label>Temperature</label>
+          <input
+            value={editingRecord.temperature}
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                temperature: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="field">
+          <label>Glycemia</label>
+          <input
+            value={editingRecord.glycemia}
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                glycemia: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="field">
+          <label>UOP</label>
+          <input
+            value={editingRecord.urineOutput}
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                urineOutput: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="field full">
+          <label>Progress Note</label>
+          <textarea
+            rows={5}
+            value={
+              editingRecord.note === "—"
+                ? ""
+                : editingRecord.note
+            }
+            onChange={(event) =>
+              setEditingRecord({
+                ...editingRecord,
+                note: event.target.value,
+              })
+            }
+          />
+        </div>
+
+        <div className="formActions full">
+          <button
+            type="button"
+            className="secondaryButton"
+            onClick={() => setEditingRecord(null)}
+          >
+            Cancel
+          </button>
+
+          <button
+  type="button"
+  className="primaryButton"
+  onClick={handleRecordUpdate}
+>
+  Save Changes
+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         
         {showForm && (
@@ -2133,6 +2370,8 @@ function Records({
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [showDownloadOptions, setShowDownloadOptions] =
+  useState(false);
 
   function formatRecordDateForFilter(
     dateString: string
@@ -2172,6 +2411,124 @@ function Records({
       const matchesTo =
         !toDate || recordDate <= toDate;
 
+function downloadRecords(
+  mode: "vitals" | "notes" | "both"
+) {
+  if (filteredRecords.length === 0) {
+    alert("There are no records to download.");
+    return;
+  }
+
+  let headers: string[] = [];
+  let rows: string[][] = [];
+
+  if (mode === "vitals") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "BP",
+      "Heart Rate",
+      "SpO2",
+      "Temperature",
+      "Glycemia",
+      "Urine Output",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.bp,
+      record.heartRate,
+      record.spo2,
+      record.temperature,
+      record.glycemia,
+      record.urineOutput,
+    ]);
+  }
+
+  if (mode === "notes") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "Progress Note",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.note,
+    ]);
+  }
+
+  if (mode === "both") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "BP",
+      "Heart Rate",
+      "SpO2",
+      "Temperature",
+      "Glycemia",
+      "Urine Output",
+      "Progress Note",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.bp,
+      record.heartRate,
+      record.spo2,
+      record.temperature,
+      record.glycemia,
+      record.urineOutput,
+      record.note,
+    ]);
+  }
+
+  const escapeCsv = (value: string) =>
+    `"${String(value ?? "")
+      .replace(/"/g, '""')}"`;
+
+  const csvContent = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((row) =>
+      row.map(escapeCsv).join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+
+  link.download =
+    mode === "vitals"
+      ? "homecare-vitals.csv"
+      : mode === "notes"
+      ? "homecare-progress-notes.csv"
+      : "homecare-vitals-and-notes.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+
+  setShowDownloadOptions(false);
+}
+
       return (
         matchesSearch &&
         matchesFrom &&
@@ -2179,6 +2536,123 @@ function Records({
       );
     }
   );
+
+  function downloadRecords(
+  mode: "vitals" | "notes" | "both"
+) {
+  if (filteredRecords.length === 0) {
+    alert("There are no records to download.");
+    return;
+  }
+
+  let headers: string[] = [];
+  let rows: string[][] = [];
+
+  if (mode === "vitals") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "BP",
+      "Heart Rate",
+      "SpO2",
+      "Temperature",
+      "Glycemia",
+      "Urine Output",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.bp,
+      record.heartRate,
+      record.spo2,
+      record.temperature,
+      record.glycemia,
+      record.urineOutput,
+    ]);
+  }
+
+  if (mode === "notes") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "Progress Note",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.note,
+    ]);
+  }
+
+  if (mode === "both") {
+    headers = [
+      "Date",
+      "Time",
+      "Patient",
+      "BP",
+      "Heart Rate",
+      "SpO2",
+      "Temperature",
+      "Glycemia",
+      "Urine Output",
+      "Progress Note",
+    ];
+
+    rows = filteredRecords.map((record) => [
+      record.date,
+      record.time,
+      record.patient,
+      record.bp,
+      record.heartRate,
+      record.spo2,
+      record.temperature,
+      record.glycemia,
+      record.urineOutput,
+      record.note,
+    ]);
+  }
+
+  const escapeCsv = (value: string) =>
+    `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+  const csvContent = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((row) =>
+      row.map(escapeCsv).join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+
+  link.download =
+    mode === "vitals"
+      ? "homecare-vitals.csv"
+      : mode === "notes"
+      ? "homecare-progress-notes.csv"
+      : "homecare-vitals-and-notes.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+
+  setShowDownloadOptions(false);
+}
 
   function displayValue(
     value: string,
@@ -2190,7 +2664,7 @@ function Records({
 
     return `${value}${unit}`;
   }
-
+  
   return (
     <section className="panel">
       <div className="panelHeader">
@@ -2203,15 +2677,11 @@ function Records({
         </div>
 
         <button
-          className="secondaryButton"
-          onClick={() =>
-            alert(
-              "Record download will be connected later."
-            )
-          }
-        >
-          Download Records
-        </button>
+  className="secondaryButton"
+  onClick={() => setShowDownloadOptions(true)}
+>
+  Download Records
+</button>
       </div>
 
       <div className="filters">
@@ -2349,7 +2819,59 @@ function Records({
             )}
           </tbody>
         </table>
-      </div>
+            </div>
+
+      {showDownloadOptions && (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <div className="panelHeader">
+              <div>
+                <h3>Download Records</h3>
+                <p>
+                  Choose what you want to include.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="closeButton"
+                onClick={() =>
+                  setShowDownloadOptions(false)
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="formActions">
+              <button
+  type="button"
+  className="secondaryButton"
+  onClick={() => downloadRecords("vitals")}
+>
+  Vitals Only
+</button>
+
+<button
+  type="button"
+  className="secondaryButton"
+  onClick={() => downloadRecords("notes")}
+>
+  Progress Notes Only
+</button>
+
+<button
+  type="button"
+  className="primaryButton"
+  onClick={() => downloadRecords("both")}
+>
+  Vitals + Notes
+</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
