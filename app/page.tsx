@@ -550,9 +550,11 @@ async function loadRecords() {
           const fullName =
             staff.full_name?.trim() || "";
 
-          recorderNames[staff.id] =
-            fullName.split(/\s+/)[0] ||
-            "Unknown";
+          const nameParts = fullName.split(/\s+/);
+
+recorderNames[staff.id] =
+  nameParts[nameParts.length - 1] ||
+  "Unknown";
         }
       );
     }
