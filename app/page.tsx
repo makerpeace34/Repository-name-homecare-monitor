@@ -2782,25 +2782,34 @@ async function resetUserPassword(
       </td>
 
       <td>
-  <button
-    className="tableButton"
-    onClick={() =>
-      toggleUserStatus(user)
-    }
+  <div
+    style={{
+      display: "flex",
+      gap: "10px",
+      alignItems: "center",
+    }}
   >
-    {user.active
-      ? "Deactivate"
-      : "Activate"}
-  </button>
+    <button
+      className="tableButton"
+      onClick={() =>
+        toggleUserStatus(user)
+      }
+    >
+      {user.active
+        ? "Deactivate"
+        : "Activate"}
+    </button>
 
-  <button
-    className="tableButton"
-    onClick={() =>
-      resetUserPassword(user)
-    }
-  >
-    Reset Password
-  </button>
+    <button
+  className="tableButton"
+  style={{ marginLeft: "16px" }}
+  onClick={() =>
+    resetUserPassword(user)
+  }
+>
+  Reset Password
+</button>
+  </div>
 </td>
     </tr>
   ))
