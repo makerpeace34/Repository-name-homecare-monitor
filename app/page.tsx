@@ -55,6 +55,27 @@ type Profile = {
   active: boolean;
 };
 
+
+type Treatment = {
+  id: string;
+  patientId: string;
+  medication: string;
+  createdAt: string;
+};
+
+type RosterAssignment = {
+  id: string;
+  shiftDate: string;
+  shift: "day" | "night";
+  userId: string;
+  fullName: string;
+};
+
+type RosterStaff = {
+  id: string;
+  fullName: string;
+};
+
 const emptyPatientForm: PatientFormData = {
   patientCode: "",
   firstName: "",
@@ -851,6 +872,8 @@ async function handleSignOut() {
             records={records}
             activePatients={activePatients}
             setActivePage={setActivePage}
+            profile={profile}
+            session={session}
           />
         )}
 
@@ -914,11 +937,17 @@ function Dashboard({
   records,
   activePatients,
   setActivePage,
+  profile,
+  session,
 }: {
   records: VitalRecord[];
   activePatients: number;
   setActivePage: (page: string) => void;
+  profile: Profile;
+  session: Session;
 }) {
+  const [showRoster, setShowRoster] = useState(false);
+
   const today = formatNumericDate(new Date());
 
   const recordsToday = records.filter(
@@ -931,18 +960,13 @@ function Dashboard({
       record.note !== "—"
   );
 
-  const recentRecords = records.slice(0, 5);
-
-  function displayValue(
-    value: string,
-    unit: string
-  ) {
-    if (!value || value === "—") {
-      return "—";
-    }
-
-    return `${value}${unit}`;
-  }
+  // Dashboard recent records intentionally show progress notes only.
+  const recentRecords = records
+    .filter(
+      (record) =>
+        record.note && record.note !== "—"
+    )
+    .slice(0, 5);
 
   function shouldShowPatientName(
     record: VitalRecord,
@@ -960,7 +984,6 @@ function Dashboard({
       <section className="welcome">
         <div>
           <h2>Patient monitoring dashboard</h2>
-
           <p>
             Review recent homecare activity and quickly
             enter new patient observations.
@@ -969,9 +992,7 @@ function Dashboard({
 
         <button
           className="primaryButton"
-          onClick={() =>
-            setActivePage("New Record")
-          }
+          onClick={() => setActivePage("New Record")}
         >
           + New Record
         </button>
@@ -991,9 +1012,10 @@ function Dashboard({
         />
 
         <StatCard
-          title="Total Records"
-          value={String(records.length)}
-          detail="All saved clinical records"
+          title="Staff"
+          value="👥"
+          detail="Open weekly roster"
+          onClick={() => setShowRoster(true)}
         />
 
         <StatCard
@@ -1008,17 +1030,12 @@ function Dashboard({
           <div className="panelHeader">
             <div>
               <h3>Recent patient records</h3>
-
-              <p>
-                Latest recorded observations
-              </p>
+              <p>Latest progress notes</p>
             </div>
 
             <button
               className="textButton"
-              onClick={() =>
-                setActivePage("Records")
-              }
+              onClick={() => setActivePage("Records")}
             >
               View all
             </button>
@@ -1032,12 +1049,6 @@ function Dashboard({
                   <th>Date & Time</th>
                   <th>Entered By</th>
                   <th>Progress Note</th>
-                  <th>BP</th>
-                  <th>HR</th>
-                  <th>SpO₂</th>
-                  <th>Temp</th>
-                  <th>Glycemia</th>
-                  <th>UOP</th>
                 </tr>
               </thead>
 
@@ -1059,58 +1070,21 @@ function Dashboard({
 
                       <td
                         style={{
-                          minWidth: 220,
+                          minWidth: 280,
                           whiteSpace: "normal",
                         }}
                       >
                         {record.note}
-                      </td>
-
-                      <td>{record.bp}</td>
-
-                      <td>
-                        {displayValue(
-                          record.heartRate,
-                          " bpm"
-                        )}
-                      </td>
-
-                      <td>
-                        {displayValue(
-                          record.spo2,
-                          "%"
-                        )}
-                      </td>
-
-                      <td>
-                        {displayValue(
-                          record.temperature,
-                          " °C"
-                        )}
-                      </td>
-
-                      <td>
-                        {displayValue(
-                          record.glycemia,
-                          " mg/dL"
-                        )}
-                      </td>
-
-                      <td>
-                        {displayValue(
-                          record.urineOutput,
-                          " mL"
-                        )}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={4}
                       style={{ textAlign: "center" }}
                     >
-                      No patient records yet.
+                      No progress notes yet.
                     </td>
                   </tr>
                 )}
@@ -1123,64 +1097,51 @@ function Dashboard({
           <div className="panelHeader">
             <div>
               <h3>Quick actions</h3>
-
               <p>Common activities</p>
             </div>
           </div>
 
           <div className="quickActions">
             <button
-              onClick={() =>
-                setActivePage("New Record")
-              }
+              onClick={() => setActivePage("New Record")}
             >
               <span>＋</span>
-
               <div>
-                <strong>Record vitals</strong>
-
-                <small>
-                  Add patient observations
-                </small>
+                <strong>New record</strong>
+                <small>Add progress note or vitals</small>
               </div>
             </button>
 
             <button
-              onClick={() =>
-                setActivePage("Patients")
-              }
+              onClick={() => setActivePage("Patients")}
             >
               <span>♙</span>
-
               <div>
                 <strong>Patients</strong>
-
-                <small>
-                  View patient list
-                </small>
+                <small>View patient list</small>
               </div>
             </button>
 
             <button
-              onClick={() =>
-                setActivePage("Records")
-              }
+              onClick={() => setActivePage("Records")}
             >
               <span>▤</span>
-
               <div>
-                <strong>
-                  Clinical records
-                </strong>
-
-                <small>
-                  Search patient history
-                </small>
+                <strong>Clinical records</strong>
+                <small>Search patient history</small>
               </div>
             </button>
           </div>
         </div>
       </section>
+
+      {showRoster && (
+        <StaffRoster
+          profile={profile}
+          session={session}
+          onClose={() => setShowRoster(false)}
+        />
+      )}
     </>
   );
 }
@@ -1189,16 +1150,461 @@ function StatCard({
   title,
   value,
   detail,
+  onClick,
 }: {
   title: string;
   value: string;
   detail: string;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="statCard">
+  const content = (
+    <>
       <p>{title}</p>
       <h2>{value}</h2>
       <span>{detail}</span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="statCard"
+        onClick={onClick}
+        style={{
+          textAlign: "left",
+          width: "100%",
+          cursor: "pointer",
+          font: "inherit",
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className="statCard">{content}</div>;
+}
+
+function StaffRoster({
+  profile,
+  session,
+  onClose,
+}: {
+  profile: Profile;
+  session: Session;
+  onClose: () => void;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [assignments, setAssignments] = useState<RosterAssignment[]>([]);
+  const [staff, setStaff] = useState<RosterStaff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingCell, setEditingCell] = useState<{
+    date: string;
+    shift: "day" | "night";
+  } | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState("");
+
+  const weekStart = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const mondayDistance = day === 0 ? -6 : 1 - day;
+
+    const monday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + mondayDistance + weekOffset * 7
+    );
+
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }, [weekOffset]);
+
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(weekStart);
+        date.setDate(weekStart.getDate() + index);
+        return date;
+      }),
+    [weekStart]
+  );
+
+  const weekEndExclusive = useMemo(() => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + 7);
+    return date;
+  }, [weekStart]);
+
+  function databaseDate(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  async function loadRoster() {
+    setLoading(true);
+
+    const weekStartValue = databaseDate(weekStart);
+    const weekEndValue = databaseDate(weekEndExclusive);
+
+    const { data: rosterData, error: rosterError } = await supabase
+      .from("staff_roster")
+      .select("id, shift_date, shift, user_id")
+      .gte("shift_date", weekStartValue)
+      .lt("shift_date", weekEndValue)
+      .order("shift_date");
+
+    if (rosterError) {
+      console.error("Roster error:", rosterError);
+      alert(
+        "Could not load the staff roster. Make sure the staff_roster table has been created in Supabase."
+      );
+      setLoading(false);
+      return;
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .rpc("get_active_roster_staff");
+
+    if (profileError) {
+      console.error("Staff profile error:", profileError);
+    }
+
+    const activeStaff: RosterStaff[] = (profileData || []).map(
+      (member: any) => ({
+        id: member.id,
+        fullName: member.full_name || "Unnamed Staff",
+      })
+    );
+
+    // Always keep the logged-in user available, even if profile RLS
+    // only exposes their own profile.
+    if (!activeStaff.some((member) => member.id === session.user.id)) {
+      activeStaff.push({
+        id: session.user.id,
+        fullName:
+          profile.full_name || session.user.email || "Current User",
+      });
+    }
+
+    const nameById: Record<string, string> = {};
+    activeStaff.forEach((member) => {
+      nameById[member.id] = member.fullName;
+    });
+
+    setStaff(activeStaff);
+    setAssignments(
+      (rosterData || []).map((item: any) => ({
+        id: item.id,
+        shiftDate: item.shift_date,
+        shift: item.shift,
+        userId: item.user_id,
+        fullName: nameById[item.user_id] || "Staff",
+      }))
+    );
+
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadRoster();
+  }, [weekStart]);
+
+  function assignmentFor(
+    date: Date,
+    shift: "day" | "night"
+  ) {
+    const dateValue = databaseDate(date);
+    return assignments.find(
+      (item) =>
+        item.shiftDate === dateValue && item.shift === shift
+    );
+  }
+
+  async function handleCaregiverCell(
+    date: Date,
+    shift: "day" | "night"
+  ) {
+    const existing = assignmentFor(date, shift);
+
+    if (existing && existing.userId !== session.user.id) {
+      alert("This shift has already been selected by another staff member.");
+      return;
+    }
+
+    if (existing && existing.userId === session.user.id) {
+      const { error } = await supabase
+        .from("staff_roster")
+        .delete()
+        .eq("id", existing.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      await loadRoster();
+      return;
+    }
+
+    const { error } = await supabase
+      .from("staff_roster")
+      .insert({
+        shift_date: databaseDate(date),
+        shift,
+        user_id: session.user.id,
+      });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadRoster();
+  }
+
+  function handleCellClick(
+    date: Date,
+    shift: "day" | "night"
+  ) {
+    if (profile.role === "admin") {
+      const existing = assignmentFor(date, shift);
+      setEditingCell({
+        date: databaseDate(date),
+        shift,
+      });
+      setSelectedStaffId(existing?.userId || "");
+      return;
+    }
+
+    handleCaregiverCell(date, shift);
+  }
+
+  async function saveAdminAssignment() {
+    if (!editingCell) {
+      return;
+    }
+
+    const existing = assignments.find(
+      (item) =>
+        item.shiftDate === editingCell.date &&
+        item.shift === editingCell.shift
+    );
+
+    if (!selectedStaffId) {
+      if (existing) {
+        const { error } = await supabase
+          .from("staff_roster")
+          .delete()
+          .eq("id", existing.id);
+
+        if (error) {
+          alert(error.message);
+          return;
+        }
+      }
+
+      setEditingCell(null);
+      await loadRoster();
+      return;
+    }
+
+    if (existing) {
+      const { error } = await supabase
+        .from("staff_roster")
+        .update({ user_id: selectedStaffId })
+        .eq("id", existing.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("staff_roster")
+        .insert({
+          shift_date: editingCell.date,
+          shift: editingCell.shift,
+          user_id: selectedStaffId,
+        });
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    }
+
+    setEditingCell(null);
+    await loadRoster();
+  }
+
+  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+
+  return (
+    <div className="modalOverlay">
+      <div
+        className="modalCard"
+        style={{ maxWidth: 980, width: "94%" }}
+      >
+        <div className="panelHeader">
+          <div>
+            <h3>
+              Staff Roster · {formatNumericDate(weekStart)} - {" "}
+              {formatNumericDate(weekEndExclusive)}
+            </h3>
+            <p>
+              Staff can select an empty shift. Administrators can assign or clear any shift.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="closeButton"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <button
+            type="button"
+            className="secondaryButton"
+            onClick={() => setWeekOffset((value) => value - 1)}
+          >
+            ← Previous Week
+          </button>
+
+          <button
+            type="button"
+            className="secondaryButton"
+            onClick={() => setWeekOffset(0)}
+          >
+            Current Week
+          </button>
+
+          <button
+            type="button"
+            className="secondaryButton"
+            onClick={() => setWeekOffset((value) => value + 1)}
+          >
+            Next Week →
+          </button>
+        </div>
+
+        <div className="tableWrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>SHIFTS</th>
+                {weekDays.map((date, index) => (
+                  <th key={databaseDate(date)} style={{ textAlign: "center" }}>
+                    <div>{dayLetters[index]}</div>
+                    <small>{formatNumericDate(date).slice(0, 5)}</small>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {(["day", "night"] as const).map((shift) => (
+                <tr key={shift}>
+                  <th>{shift === "day" ? "DAY" : "NIGHT"}</th>
+
+                  {weekDays.map((date) => {
+                    const assignment = assignmentFor(date, shift);
+                    const initials = assignment
+                      ? getInitials(assignment.fullName)
+                      : "＋";
+
+                    return (
+                      <td
+                        key={`${databaseDate(date)}-${shift}`}
+                        style={{ textAlign: "center" }}
+                      >
+                        <button
+                          type="button"
+                          className="tableButton"
+                          title={
+                            assignment
+                              ? assignment.fullName
+                              : "Select this shift"
+                          }
+                          onClick={() => handleCellClick(date, shift)}
+                          style={{
+                            minWidth: 54,
+                            minHeight: 42,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {loading ? "…" : initials}
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {editingCell && profile.role === "admin" && (
+          <div
+            style={{
+              marginTop: 18,
+              padding: 16,
+              border: "1px solid #dbe3e6",
+              borderRadius: 10,
+            }}
+          >
+            <strong>Assign Staff</strong>
+            <p style={{ marginTop: 4 }}>
+              {formatStoredDate(editingCell.date)} · {editingCell.shift === "day" ? "Day" : "Night"} shift
+            </p>
+
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Staff member</label>
+              <select
+                value={selectedStaffId}
+                onChange={(event) => setSelectedStaffId(event.target.value)}
+              >
+                <option value="">Clear / No staff</option>
+                {staff.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.fullName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="formActions">
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={() => setEditingCell(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primaryButton"
+                onClick={saveAdminAssignment}
+              >
+                Save Shift
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1211,6 +1617,7 @@ function NewRecord({
   onRecordSaved: () => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  const [recordType, setRecordType] = useState<"note" | "vitals">("note");
 
   async function handleRecordSubmit(
     event: FormEvent<HTMLFormElement>
@@ -1233,13 +1640,40 @@ function NewRecord({
 
     const numberOrNull = (value: FormDataEntryValue | null) => {
       const text = String(value || "").trim();
-
       if (text === "") {
         return null;
       }
-
       return Number(text);
     };
+
+    const progressNote = String(
+      formData.get("progressNote") || ""
+    ).trim();
+
+    const vitalValues = {
+      systolic: numberOrNull(formData.get("systolic")),
+      diastolic: numberOrNull(formData.get("diastolic")),
+      heart_rate: numberOrNull(formData.get("heartRate")),
+      spo2: numberOrNull(formData.get("spo2")),
+      temperature: numberOrNull(formData.get("temperature")),
+      glycemia: numberOrNull(formData.get("glycemia")),
+      urine_output: numberOrNull(formData.get("urineOutput")),
+    };
+
+    if (recordType === "note" && !progressNote) {
+      alert("Please enter a progress note.");
+      setSaving(false);
+      return;
+    }
+
+    if (
+      recordType === "vitals" &&
+      Object.values(vitalValues).every((value) => value === null)
+    ) {
+      alert("Please enter at least one vital sign.");
+      setSaving(false);
+      return;
+    }
 
     const {
       data: userData,
@@ -1256,59 +1690,40 @@ function NewRecord({
       .from("vital_records")
       .insert({
         patient_id: patientId,
-
-        systolic: numberOrNull(
-          formData.get("systolic")
-        ),
-
-        diastolic: numberOrNull(
-          formData.get("diastolic")
-        ),
-
-        heart_rate: numberOrNull(
-          formData.get("heartRate")
-        ),
-
-        spo2: numberOrNull(
-          formData.get("spo2")
-        ),
-
-        temperature: numberOrNull(
-          formData.get("temperature")
-        ),
-
-        glycemia: numberOrNull(
-          formData.get("glycemia")
-        ),
-
-        urine_output: numberOrNull(
-          formData.get("urineOutput")
-        ),
-
+        systolic:
+          recordType === "vitals" ? vitalValues.systolic : null,
+        diastolic:
+          recordType === "vitals" ? vitalValues.diastolic : null,
+        heart_rate:
+          recordType === "vitals" ? vitalValues.heart_rate : null,
+        spo2:
+          recordType === "vitals" ? vitalValues.spo2 : null,
+        temperature:
+          recordType === "vitals" ? vitalValues.temperature : null,
+        glycemia:
+          recordType === "vitals" ? vitalValues.glycemia : null,
+        urine_output:
+          recordType === "vitals" ? vitalValues.urine_output : null,
         progress_note:
-          String(
-            formData.get("progressNote") || ""
-          ).trim() || null,
-
+          recordType === "note" ? progressNote : null,
         recorded_by: userData.user.id,
       });
 
     if (error) {
-      console.error(
-        "Error saving vital record:",
-        error
-      );
-
+      console.error("Error saving patient record:", error);
       alert(error.message);
       setSaving(false);
       return;
     }
 
-    alert("Patient record saved successfully.");
+    alert(
+      recordType === "note"
+        ? "Progress note saved successfully."
+        : "Vital signs saved successfully."
+    );
+
     await onRecordSaved();
-
     form.reset();
-
     setSaving(false);
   }
 
@@ -1317,10 +1732,8 @@ function NewRecord({
       <div className="panelHeader">
         <div>
           <h3>New patient record</h3>
-
           <p>
-            Enter the observations collected during the
-            homecare visit.
+            Choose whether you are recording a progress note or vital signs.
           </p>
         </div>
       </div>
@@ -1331,7 +1744,6 @@ function NewRecord({
       >
         <div className="field full">
           <label>Patient *</label>
-
           <select
             name="patientId"
             defaultValue=""
@@ -1348,96 +1760,121 @@ function NewRecord({
                   key={patient.id}
                   value={patient.id}
                 >
-                  {patient.patientCode} -{" "}
-                  {patient.firstName}{" "}
-                  {patient.lastName}
+                  {patient.patientCode} - {patient.firstName} {patient.lastName}
                 </option>
               ))}
           </select>
         </div>
 
-        <div className="formSectionTitle">
-          <h4>Vital signs</h4>
+        <div className="field full">
+          <label>Record Type *</label>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 12,
+            }}
+          >
+            <button
+              type="button"
+              className={
+                recordType === "note"
+                  ? "primaryButton"
+                  : "secondaryButton"
+              }
+              onClick={() => setRecordType("note")}
+            >
+              Progress Note
+            </button>
 
-          <p>
-            Only enter measurements that were taken.
-          </p>
+            <button
+              type="button"
+              className={
+                recordType === "vitals"
+                  ? "primaryButton"
+                  : "secondaryButton"
+              }
+              onClick={() => setRecordType("vitals")}
+            >
+              Vital Signs
+            </button>
+          </div>
         </div>
 
-        <div className="vitalGrid">
-          <div className="vitalCard">
-            <label>Blood Pressure</label>
-
-            <div className="dualInput">
-              <input
-                name="systolic"
-                type="number"
-                min="1"
-                placeholder="Systolic"
-              />
-
-              <span>/</span>
-
-              <input
-                name="diastolic"
-                type="number"
-                min="1"
-                placeholder="Diastolic"
-              />
+        {recordType === "note" ? (
+          <div className="field full">
+            <label>Progress Note *</label>
+            <textarea
+              name="progressNote"
+              rows={7}
+              placeholder="Enter the patient's progress note..."
+            />
+          </div>
+        ) : (
+          <>
+            <div className="formSectionTitle">
+              <h4>Vital signs</h4>
+              <p>Only enter measurements that were taken.</p>
             </div>
 
-            <small>mmHg</small>
-          </div>
+            <div className="vitalGrid">
+              <div className="vitalCard">
+                <label>Blood Pressure</label>
+                <div className="dualInput">
+                  <input
+                    name="systolic"
+                    type="number"
+                    min="1"
+                    placeholder="Systolic"
+                  />
+                  <span>/</span>
+                  <input
+                    name="diastolic"
+                    type="number"
+                    min="1"
+                    placeholder="Diastolic"
+                  />
+                </div>
+                <small>mmHg</small>
+              </div>
 
-          <VitalInput
-            name="heartRate"
-            title="Heart Rate"
-            placeholder="e.g. 72"
-            unit="bpm"
-          />
-
-          <VitalInput
-            name="spo2"
-            title="SpO₂"
-            placeholder="e.g. 98"
-            unit="%"
-            step="0.1"
-          />
-
-          <VitalInput
-            name="temperature"
-            title="Temperature"
-            placeholder="e.g. 36.7"
-            unit="°C"
-            step="0.1"
-          />
-
-          <VitalInput
-            name="glycemia"
-            title="Glycemia"
-            placeholder="e.g. 95"
-            unit="mg/dL"
-            step="0.1"
-          />
-
-          <VitalInput
-            name="urineOutput"
-            title="Urine Output (UOP)"
-            placeholder="e.g. 450"
-            unit="mL"
-            step="0.1"
-          />
-        </div>
-
-        <div className="field full">
-          <label>Progress Note</label>
-
-          <textarea
-            name="progressNote"
-            rows={6}
-            placeholder="Enter a short patient progress note..."
-          />
-        </div>
+              <VitalInput
+                name="heartRate"
+                title="Heart Rate"
+                placeholder="e.g. 72"
+                unit="bpm"
+              />
+              <VitalInput
+                name="spo2"
+                title="SpO₂"
+                placeholder="e.g. 98"
+                unit="%"
+                step="0.1"
+              />
+              <VitalInput
+                name="temperature"
+                title="Temperature"
+                placeholder="e.g. 36.7"
+                unit="°C"
+                step="0.1"
+              />
+              <VitalInput
+                name="glycemia"
+                title="Glycemia"
+                placeholder="e.g. 95"
+                unit="mg/dL"
+                step="0.1"
+              />
+              <VitalInput
+                name="urineOutput"
+                title="Urine Output (UOP)"
+                placeholder="e.g. 450"
+                unit="mL"
+                step="0.1"
+              />
+            </div>
+          </>
+        )}
 
         <div className="formActions">
           <button
@@ -1453,9 +1890,7 @@ function NewRecord({
             className="primaryButton"
             disabled={saving}
           >
-            {saving
-              ? "Saving..."
-              : "Save Record"}
+            {saving ? "Saving..." : "Save Record"}
           </button>
         </div>
       </form>
@@ -1479,14 +1914,12 @@ function VitalInput({
   return (
     <div className="vitalCard">
       <label>{title}</label>
-
       <input
         name={name}
         type="number"
         placeholder={placeholder}
         step={step}
       />
-
       <small>{unit}</small>
     </div>
   );
@@ -1519,6 +1952,18 @@ const [viewPatientId, setViewPatientId] =
   useState<VitalRecord | null>(null);
 
   const [search, setSearch] = useState("");
+  const [patientHistoryView, setPatientHistoryView] =
+    useState<"notes" | "vitals">("notes");
+  const [showPatientVitalOptions, setShowPatientVitalOptions] =
+    useState(false);
+  const [patientVisibleVitals, setPatientVisibleVitals] = useState({
+    bp: true,
+    heartRate: true,
+    spo2: true,
+    temperature: true,
+    glycemia: true,
+    urineOutput: true,
+  });
 
   const [formData, setFormData] =
     useState<PatientFormData>(emptyPatientForm);
@@ -1799,6 +2244,72 @@ async function handleRecordUpdate() {
         record.patientId === selectedPatient.id
     );
 
+    const patientNoteRecords = patientRecords.filter(
+      (record) => record.note !== "—"
+    );
+
+    const patientVitalRecords = patientRecords.filter(
+      (record) =>
+        record.bp !== "—" ||
+        record.heartRate !== "—" ||
+        record.spo2 !== "—" ||
+        record.temperature !== "—" ||
+        record.glycemia !== "—" ||
+        record.urineOutput !== "—"
+    );
+
+    const patientVitalColumns = [
+      {
+        key: "bp" as const,
+        label: "BP",
+        display: (record: VitalRecord) => record.bp,
+      },
+      {
+        key: "heartRate" as const,
+        label: "HR",
+        display: (record: VitalRecord) =>
+          record.heartRate !== "—"
+            ? `${record.heartRate} bpm`
+            : "—",
+      },
+      {
+        key: "spo2" as const,
+        label: "SpO₂",
+        display: (record: VitalRecord) =>
+          record.spo2 !== "—"
+            ? `${record.spo2}%`
+            : "—",
+      },
+      {
+        key: "temperature" as const,
+        label: "Temp",
+        display: (record: VitalRecord) =>
+          record.temperature !== "—"
+            ? `${record.temperature} °C`
+            : "—",
+      },
+      {
+        key: "glycemia" as const,
+        label: "Glycemia",
+        display: (record: VitalRecord) =>
+          record.glycemia !== "—"
+            ? `${record.glycemia} mg/dL`
+            : "—",
+      },
+      {
+        key: "urineOutput" as const,
+        label: "UOP",
+        display: (record: VitalRecord) =>
+          record.urineOutput !== "—"
+            ? `${record.urineOutput} mL`
+            : "—",
+      },
+    ];
+
+    const selectedPatientVitalColumns = patientVitalColumns.filter(
+      (column) => patientVisibleVitals[column.key]
+    );
+
     return (
       <section className="panel">
         <div className="panelHeader">
@@ -1900,110 +2411,194 @@ async function handleRecordUpdate() {
           />
         </div>
 
+        <PatientTreatments patientId={selectedPatient.id} />
+
         <div
-  className="formSectionTitle"
-  style={{ marginTop: 28 }}
->
-  <h4>Patient Record History</h4>
+          className="formSectionTitle"
+          style={{ marginTop: 28 }}
+        >
+          <h4>Patient Record History</h4>
+          <p>
+            Progress notes are shown by default. Open Vitals when you need vital-sign records.
+          </p>
+        </div>
 
-  <p>
-    Recent vital-sign observations and progress
-    notes for this patient.
-  </p>
-</div>
-
-<div
-  className="tableWrapper"
-  style={{ marginTop: 14 }}
->
-  <table>
-    <thead>
-      <tr>
-        <th>Date & Time</th>
-        <th>Progress Note</th>
-        <th>BP</th>
-        <th>HR</th>
-        <th>SpO₂</th>
-        <th>Temp</th>
-        <th>Glycemia</th>
-        <th>UOP</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-
-    <tbody>
-      {patientRecords.length > 0 ? (
-        patientRecords.map((record) => (
-          <tr key={record.id}>
-            <td>
-  <div>
-    {record.date} · {record.time}
-  </div>
-  <small>
-    By: {record.enteredBy}
-  </small>
-</td>
-
-            <td>{record.note}</td>
-
-            <td>{record.bp}</td>
-
-            <td>
-              {record.heartRate !== "—"
-                ? `${record.heartRate} bpm`
-                : "—"}
-            </td>
-
-            <td>
-              {record.spo2 !== "—"
-                ? `${record.spo2}%`
-                : "—"}
-            </td>
-
-            <td>
-              {record.temperature !== "—"
-                ? `${record.temperature} °C`
-                : "—"}
-            </td>
-
-            <td>
-        {record.glycemia !== "—"
-  ? `${record.glycemia} mg/dL`
-  : "—"}
-</td>
-
-<td>
-  {record.urineOutput !== "—"
-    ? `${record.urineOutput} mL`
-    : "—"}
-</td>
-
-<td>
-  <button
-    className="tableButton"
-    onClick={() => setEditingRecord(record)}
-  >
-    Edit
-  </button>
-</td>
-</tr>
-))
-      ) : (
-        <tr>
-          <td
-            colSpan={9}
-            style={{ textAlign: "center" }}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginTop: 14,
+            marginBottom: 12,
+          }}
+        >
+          <button
+            type="button"
+            className={
+              patientHistoryView === "notes"
+                ? "primaryButton"
+                : "secondaryButton"
+            }
+            onClick={() => setPatientHistoryView("notes")}
           >
-            No patient records yet.
-          </td>
-          <td>
-  
-</td>
-        </tr>
-      )}
-    </tbody>
-  </table>
-</div>
+            Progress Notes
+          </button>
+
+          <button
+            type="button"
+            className={
+              patientHistoryView === "vitals"
+                ? "primaryButton"
+                : "secondaryButton"
+            }
+            onClick={() => setPatientHistoryView("vitals")}
+          >
+            Vitals
+          </button>
+        </div>
+
+        {patientHistoryView === "vitals" && (
+          <div style={{ marginBottom: 14 }}>
+            <button
+              type="button"
+              className="secondaryButton"
+              onClick={() =>
+                setShowPatientVitalOptions((value) => !value)
+              }
+            >
+              Vitals to display {showPatientVitalOptions ? "▲" : "▼"}
+            </button>
+
+            {showPatientVitalOptions && (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 12,
+                  border: "1px solid #dbe3e6",
+                  borderRadius: 10,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 14,
+                }}
+              >
+                {patientVitalColumns.map((column) => (
+                  <label
+                    key={column.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={patientVisibleVitals[column.key]}
+                      onChange={() =>
+                        setPatientVisibleVitals((current) => ({
+                          ...current,
+                          [column.key]: !current[column.key],
+                        }))
+                      }
+                    />
+                    {column.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="tableWrapper">
+          {patientHistoryView === "notes" ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Entered By</th>
+                  <th>Progress Note</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patientNoteRecords.length > 0 ? (
+                  patientNoteRecords.map((record) => (
+                    <tr key={record.id}>
+                      <td>{record.date} · {record.time}</td>
+                      <td>{record.enteredBy}</td>
+                      <td
+                        style={{
+                          minWidth: 300,
+                          whiteSpace: "normal",
+                        }}
+                      >
+                        {record.note}
+                      </td>
+                      <td>
+                        <button
+                          className="tableButton"
+                          onClick={() => setEditingRecord(record)}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center" }}>
+                      No progress notes yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Entered By</th>
+                  {selectedPatientVitalColumns.map((column) => (
+                    <th key={column.key}>{column.label}</th>
+                  ))}
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patientVitalRecords.length > 0 ? (
+                  patientVitalRecords.map((record) => (
+                    <tr key={record.id}>
+                      <td>{record.date} · {record.time}</td>
+                      <td>{record.enteredBy}</td>
+                      {selectedPatientVitalColumns.map((column) => (
+                        <td key={column.key}>
+                          {column.display(record)}
+                        </td>
+                      ))}
+                      <td>
+                        <button
+                          className="tableButton"
+                          onClick={() => setEditingRecord(record)}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={3 + selectedPatientVitalColumns.length}
+                      style={{ textAlign: "center" }}
+                    >
+                      No vital-sign records yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
 
 {editingRecord && (
   <div className="modalOverlay">
@@ -2316,6 +2911,199 @@ async function handleRecordUpdate() {
   );
 }
 
+function PatientTreatments({
+  patientId,
+}: {
+  patientId: string;
+}) {
+  const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [medication, setMedication] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  async function loadTreatments() {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("patient_treatments")
+      .select("id, patient_id, medication, created_at")
+      .eq("patient_id", patientId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Treatment loading error:", error);
+      setTreatments([]);
+      setLoading(false);
+      return;
+    }
+
+    setTreatments(
+      (data || []).map((item: any) => ({
+        id: item.id,
+        patientId: item.patient_id,
+        medication: item.medication,
+        createdAt: item.created_at,
+      }))
+    );
+
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadTreatments();
+  }, [patientId]);
+
+  async function addTreatment() {
+    const cleanMedication = medication.trim();
+
+    if (!cleanMedication) {
+      alert("Enter a treatment or medication first.");
+      return;
+    }
+
+    setSaving(true);
+
+    const {
+      data: userData,
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !userData.user) {
+      alert("Your login session could not be verified.");
+      setSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("patient_treatments")
+      .insert({
+        patient_id: patientId,
+        medication: cleanMedication,
+        created_by: userData.user.id,
+      });
+
+    if (error) {
+      alert(error.message);
+      setSaving(false);
+      return;
+    }
+
+    setMedication("");
+    await loadTreatments();
+    setSaving(false);
+  }
+
+  async function removeTreatment(id: string) {
+    const confirmed = window.confirm(
+      "Remove this treatment from the patient's current treatment list?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("patient_treatments")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadTreatments();
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        padding: 18,
+        border: "1px solid #dbe3e6",
+        borderRadius: 12,
+      }}
+    >
+      <div className="panelHeader">
+        <div>
+          <h4>Patient Treatments</h4>
+          <p>
+            Current medication or treatment list for this patient.
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <p>Loading treatments...</p>
+      ) : treatments.length > 0 ? (
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          {treatments.map((treatment) => (
+            <div
+              key={treatment.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "10px 12px",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+              }}
+            >
+              <span>• {treatment.medication}</span>
+              <button
+                type="button"
+                className="tableButton dangerText"
+                onClick={() => removeTreatment(treatment.id)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ marginBottom: 16 }}>
+          No treatments added yet.
+        </p>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: 10,
+          alignItems: "end",
+        }}
+      >
+        <div className="field">
+          <label>Add Treatment</label>
+          <input
+            type="text"
+            value={medication}
+            onChange={(event) => setMedication(event.target.value)}
+            placeholder="e.g. Tramadol p.o 50 mg TID"
+          />
+        </div>
+
+        <button
+          type="button"
+          className="primaryButton"
+          onClick={addTreatment}
+          disabled={saving}
+        >
+          {saving ? "Adding..." : "+ Add"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileItem({
   label,
   value,
@@ -2572,8 +3360,9 @@ function Records({
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [showDownloadOptions, setShowDownloadOptions] =
-    useState(false);
+  const [showDownloadOptions, setShowDownloadOptions] = useState(false);
+  const [showVitalOptions, setShowVitalOptions] = useState(false);
+  const [recordView, setRecordView] = useState<"notes" | "vitals" | "all">("notes");
 
   const [visibleVitals, setVisibleVitals] = useState({
     bp: true,
@@ -2584,14 +3373,10 @@ function Records({
     urineOutput: true,
   });
 
-  function displayValue(
-    value: string,
-    unit: string
-  ) {
+  function displayValue(value: string, unit: string) {
     if (!value || value === "—") {
       return "—";
     }
-
     return `${value}${unit}`;
   }
 
@@ -2649,6 +3434,17 @@ function Records({
     (column) => visibleVitals[column.key]
   );
 
+  function hasVitals(record: VitalRecord) {
+    return (
+      record.bp !== "—" ||
+      record.heartRate !== "—" ||
+      record.spo2 !== "—" ||
+      record.temperature !== "—" ||
+      record.glycemia !== "—" ||
+      record.urineOutput !== "—"
+    );
+  }
+
   const filteredRecords = records.filter((record) => {
     const searchValue = search.toLowerCase().trim();
 
@@ -2662,7 +3458,14 @@ function Records({
     const matchesTo =
       !toDate || record.filterDate <= toDate;
 
-    return matchesSearch && matchesFrom && matchesTo;
+    const matchesType =
+      recordView === "notes"
+        ? record.note !== "—"
+        : recordView === "vitals"
+        ? hasVitals(record)
+        : true;
+
+    return matchesSearch && matchesFrom && matchesTo && matchesType;
   });
 
   const uniquePatientIds = Array.from(
@@ -2682,8 +3485,7 @@ function Records({
   ) {
     return (
       index === 0 ||
-      filteredRecords[index - 1]?.patientId !==
-        record.patientId
+      filteredRecords[index - 1]?.patientId !== record.patientId
     );
   }
 
@@ -2709,20 +3511,14 @@ function Records({
       .replace(/'/g, "&#039;");
   }
 
-  function startDownload(
-    blob: Blob,
-    fileName: string
-  ) {
+  function startDownload(blob: Blob, fileName: string) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
     link.download = fileName;
-
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     URL.revokeObjectURL(url);
     setShowDownloadOptions(false);
   }
@@ -2745,16 +3541,19 @@ function Records({
         ),
       ];
 
-      const rows = filteredRecords.map((record, index) => [
-        shouldShowPatientName(record, index)
-          ? record.patient
-          : "",
-        `${record.date} ${record.time}`,
-        record.enteredBy,
-        ...selectedVitalColumns.map(
-          (column) => column.value(record)
-        ),
-      ]);
+      const rows = filteredRecords
+        .filter(hasVitals)
+        .map((record, index) => [
+          index === 0 ||
+          filteredRecords[index - 1]?.patientId !== record.patientId
+            ? record.patient
+            : "",
+          `${record.date} ${record.time}`,
+          record.enteredBy,
+          ...selectedVitalColumns.map(
+            (column) => column.value(record)
+          ),
+        ]);
 
       const csvContent = [
         headers.map(escapeCsv).join(","),
@@ -2765,19 +3564,17 @@ function Records({
 
       const blob = new Blob(
         ["\uFEFF" + csvContent],
-        {
-          type: "text/csv;charset=utf-8;",
-        }
+        { type: "text/csv;charset=utf-8;" }
       );
 
-      startDownload(
-        blob,
-        "homecare-vitals.csv"
-      );
+      startDownload(blob, "homecare-vitals.csv");
       return;
     }
 
     const includeVitals = mode === "both";
+    const sourceRows = filteredRecords.filter((record) =>
+      mode === "notes" ? record.note !== "—" : true
+    );
 
     const wordHeaders = [
       "Patient",
@@ -2791,11 +3588,12 @@ function Records({
         : []),
     ];
 
-    const wordRows = filteredRecords.map((record, index) => [
-      shouldShowPatientName(record, index)
+    const wordRows = sourceRows.map((record, index) => [
+      index === 0 ||
+      sourceRows[index - 1]?.patientId !== record.patientId
         ? record.patient
         : "",
-      `${record.date} · ${record.time}`,
+      `${record.date} ${record.time}`,
       record.enteredBy,
       record.note,
       ...(includeVitals
@@ -2806,10 +3604,7 @@ function Records({
     ]);
 
     const headerHtml = wordHeaders
-      .map(
-        (header) =>
-          `<th>${escapeHtml(header)}</th>`
-      )
+      .map((header) => `<th>${escapeHtml(header)}</th>`)
       .join("");
 
     const rowsHtml = wordRows
@@ -2882,113 +3677,77 @@ function Records({
           <meta charset="utf-8" />
           <title>${escapeHtml(documentTitle)}</title>
           <style>
-            @page {
-              size: landscape;
-              margin: 0.5in;
-            }
-
+            @page { size: landscape; margin: 0.5in; }
             body {
               font-family: Arial, sans-serif;
               font-size: 9pt;
               color: #111827;
               margin: 0;
             }
-
             .company {
               text-align: center;
               margin-bottom: 16px;
             }
-
             .company h1 {
               margin: 0;
               font-size: 20pt;
             }
-
             .company p {
               margin: 4px 0 0;
               color: #4b5563;
             }
-
             h2 {
               font-size: 12pt;
               margin: 16px 0 8px;
             }
-
             .subtitle {
               margin-top: 4px;
               font-size: 11pt;
               font-weight: 700;
             }
-
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-
-            .patient-details {
-              margin-bottom: 18px;
-            }
-
+            .patient-details { margin-bottom: 18px; }
             .patient-detail-line {
               margin: 4px 0;
               line-height: 1.45;
             }
-
-            th,
-            td {
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+            th, td {
               border: 1px solid #cbd5e1;
               padding: 6px;
               vertical-align: top;
               text-align: left;
               overflow-wrap: anywhere;
             }
-
             th {
               background: #eef6f5;
               font-weight: 700;
             }
-
-            .records-table {
-              table-layout: fixed;
-            }
-
             .records-table th:nth-child(1),
-            .records-table td:nth-child(1) {
-              width: 15%;
-            }
-
+            .records-table td:nth-child(1) { width: 15%; }
             .records-table th:nth-child(2),
-            .records-table td:nth-child(2) {
-              width: 12%;
-            }
-
+            .records-table td:nth-child(2) { width: 13%; }
             .records-table th:nth-child(3),
-            .records-table td:nth-child(3) {
-              width: 10%;
-            }
-
+            .records-table td:nth-child(3) { width: 10%; }
             .records-table th:nth-child(4),
-            .records-table td:nth-child(4) {
-              width: 28%;
-            }
-
+            .records-table td:nth-child(4) { width: 30%; }
             .progress-note {
               white-space: pre-wrap;
               line-height: 1.35;
             }
-
             .signature-section {
               margin-top: 20px;
               page-break-inside: avoid;
             }
-
             .downloaded-by {
               margin-top: 6px;
               line-height: 1.45;
             }
           </style>
         </head>
-
         <body>
           <div class="company">
             <h1>HomeCare</h1>
@@ -3004,9 +3763,7 @@ function Records({
             <thead>
               <tr>${headerHtml}</tr>
             </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
+            <tbody>${rowsHtml}</tbody>
           </table>
 
           ${downloaderHtml}
@@ -3016,9 +3773,7 @@ function Records({
 
     const blob = new Blob(
       ["\uFEFF", wordDocument],
-      {
-        type: "application/msword;charset=utf-8;",
-      }
+      { type: "application/msword;charset=utf-8;" }
     );
 
     startDownload(
@@ -3029,23 +3784,22 @@ function Records({
     );
   }
 
+  const showNotesColumn = recordView !== "vitals";
+  const showVitalsColumns = recordView !== "notes";
+
   return (
     <section className="panel">
       <div className="panelHeader">
         <div>
           <h3>Patient records</h3>
-
           <p>
-            Search, filter and choose which vital signs
-            you want to display.
+            Progress notes are shown by default. Choose Vitals when you need vital-sign records.
           </p>
         </div>
 
         <button
           className="secondaryButton"
-          onClick={() =>
-            setShowDownloadOptions(true)
-          }
+          onClick={() => setShowDownloadOptions(true)}
         >
           Download Records
         </button>
@@ -3054,44 +3808,50 @@ function Records({
       <div className="filters">
         <div className="field">
           <label>Search patient</label>
-
           <input
             type="text"
             placeholder="Patient name or ID"
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(event) => setSearch(event.target.value)}
           />
         </div>
 
         <div className="field">
-          <label>From</label>
+          <label>Record Type</label>
+          <select
+            value={recordView}
+            onChange={(event) =>
+              setRecordView(
+                event.target.value as "notes" | "vitals" | "all"
+              )
+            }
+          >
+            <option value="notes">Progress Notes</option>
+            <option value="vitals">Vitals</option>
+            <option value="all">All Records</option>
+          </select>
+        </div>
 
+        <div className="field">
+          <label>From</label>
           <input
             type="date"
             value={fromDate}
-            onChange={(event) =>
-              setFromDate(event.target.value)
-            }
+            onChange={(event) => setFromDate(event.target.value)}
           />
         </div>
 
         <div className="field">
           <label>To</label>
-
           <input
             type="date"
             value={toDate}
-            onChange={(event) =>
-              setToDate(event.target.value)
-            }
+            onChange={(event) => setToDate(event.target.value)}
           />
         </div>
 
         <div className="field">
           <label>Clear Filters</label>
-
           <button
             type="button"
             className="secondaryButton"
@@ -3099,6 +3859,7 @@ function Records({
               setSearch("");
               setFromDate("");
               setToDate("");
+              setRecordView("notes");
             }}
           >
             Reset
@@ -3106,53 +3867,60 @@ function Records({
         </div>
       </div>
 
-      <div
-        style={{
-          marginTop: 18,
-          marginBottom: 18,
-          padding: 14,
-          border: "1px solid #dbe3e6",
-          borderRadius: 10,
-        }}
-      >
-        <strong
-          style={{
-            display: "block",
-            marginBottom: 10,
-          }}
-        >
-          Vitals to display
-        </strong>
-
+      {recordView !== "notes" && (
         <div
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 14,
+            marginTop: 18,
+            marginBottom: 18,
           }}
         >
-          {vitalColumns.map((column) => (
-            <label
-              key={column.key}
+          <button
+            type="button"
+            className="secondaryButton"
+            onClick={() => setShowVitalOptions((value) => !value)}
+          >
+            Vitals to display {showVitalOptions ? "▲" : "▼"}
+          </button>
+
+          {showVitalOptions && (
+            <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                cursor: "pointer",
+                marginTop: 10,
+                padding: 14,
+                border: "1px solid #dbe3e6",
+                borderRadius: 10,
               }}
             >
-              <input
-                type="checkbox"
-                checked={visibleVitals[column.key]}
-                onChange={() =>
-                  toggleVital(column.key)
-                }
-              />
-              {column.label}
-            </label>
-          ))}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 14,
+                }}
+              >
+                {vitalColumns.map((column) => (
+                  <label
+                    key={column.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleVitals[column.key]}
+                      onChange={() => toggleVital(column.key)}
+                    />
+                    {column.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <div className="tableWrapper">
         <table>
@@ -3161,15 +3929,11 @@ function Records({
               <th>Patient</th>
               <th>Date & Time</th>
               <th>Entered By</th>
-              <th>Progress Note</th>
-
-              {selectedVitalColumns.map(
-                (column) => (
-                  <th key={column.key}>
-                    {column.label}
-                  </th>
-                )
-              )}
+              {showNotesColumn && <th>Progress Note</th>}
+              {showVitalsColumns &&
+                selectedVitalColumns.map((column) => (
+                  <th key={column.key}>{column.label}</th>
+                ))}
             </tr>
           </thead>
 
@@ -3182,36 +3946,35 @@ function Records({
                       ? record.patient
                       : ""}
                   </td>
-
-                  <td>
-                    {record.date} · {record.time}
-                  </td>
-
+                  <td>{record.date} · {record.time}</td>
                   <td>{record.enteredBy}</td>
-
-                  <td
-                    style={{
-                      minWidth: 220,
-                      whiteSpace: "normal",
-                    }}
-                  >
-                    {record.note}
-                  </td>
-
-                  {selectedVitalColumns.map(
-                    (column) => (
+                  {showNotesColumn && (
+                    <td
+                      style={{
+                        minWidth: 260,
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {record.note}
+                    </td>
+                  )}
+                  {showVitalsColumns &&
+                    selectedVitalColumns.map((column) => (
                       <td key={column.key}>
                         {column.display(record)}
                       </td>
-                    )
-                  )}
+                    ))}
                 </tr>
               ))
             ) : (
               <tr>
                 <td
                   colSpan={
-                    4 + selectedVitalColumns.length
+                    3 +
+                    (showNotesColumn ? 1 : 0) +
+                    (showVitalsColumns
+                      ? selectedVitalColumns.length
+                      : 0)
                   }
                   style={{ textAlign: "center" }}
                 >
@@ -3229,19 +3992,14 @@ function Records({
             <div className="panelHeader">
               <div>
                 <h3>Download Records</h3>
-
                 <p>
-                  Downloads use the current patient/date
-                  filters and your selected vital signs.
+                  Downloads use the current patient/date filters and your selected vital signs.
                 </p>
               </div>
-
               <button
                 type="button"
                 className="closeButton"
-                onClick={() =>
-                  setShowDownloadOptions(false)
-                }
+                onClick={() => setShowDownloadOptions(false)}
               >
                 ×
               </button>
@@ -3251,29 +4009,21 @@ function Records({
               <button
                 type="button"
                 className="secondaryButton"
-                onClick={() =>
-                  downloadRecords("vitals")
-                }
+                onClick={() => downloadRecords("vitals")}
               >
                 Vitals Only (CSV)
               </button>
-
               <button
                 type="button"
                 className="secondaryButton"
-                onClick={() =>
-                  downloadRecords("notes")
-                }
+                onClick={() => downloadRecords("notes")}
               >
                 Progress Notes (Word)
               </button>
-
               <button
                 type="button"
                 className="primaryButton"
-                onClick={() =>
-                  downloadRecords("both")
-                }
+                onClick={() => downloadRecords("both")}
               >
                 Vitals + Notes (Word)
               </button>
