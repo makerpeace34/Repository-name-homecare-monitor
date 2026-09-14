@@ -9,8 +9,10 @@ type VitalRecord = {
   patientId: string;
   patient: string;
   date: string;
+  filterDate: string;
   time: string;
   enteredBy: string;
+  enteredByFull: string;
   bp: string;
   heartRate: string;
   spo2: string;
@@ -64,6 +66,36 @@ const emptyPatientForm: PatientFormData = {
   emergencyContact: "",
   emergencyPhone: "",
 };
+
+function formatNumericDate(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}/${month}/${year}`;
+}
+
+function formatFilterDate(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatStoredDate(dateString: string) {
+  if (!dateString) {
+    return "";
+  }
+
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return dateString;
+  }
+
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
 
 export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
@@ -214,6 +246,8 @@ function LoginScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -240,6 +274,40 @@ function LoginScreen({
 } 
 
     setSigningIn(false);
+  }
+
+  async function handleForgotPassword() {
+    const cleanEmail = email.trim();
+
+    setAuthError("");
+    setResetMessage("");
+
+    if (!cleanEmail) {
+      setAuthError(
+        "Enter your email address first, then select Forgot password."
+      );
+      return;
+    }
+
+    setResettingPassword(true);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      cleanEmail,
+      {
+        redirectTo: `${window.location.origin}/`,
+      }
+    );
+
+    if (error) {
+      setAuthError(error.message);
+      setResettingPassword(false);
+      return;
+    }
+
+    setResetMessage(
+      "Password reset link sent. Check your email and follow the link to create a new password."
+    );
+    setResettingPassword(false);
   }
 
   return (
@@ -293,7 +361,35 @@ function LoginScreen({
           >
             {signingIn ? "Signing in..." : "Sign In"}
           </button>
+
+          <button
+            type="button"
+            className="textButton"
+            onClick={handleForgotPassword}
+            disabled={resettingPassword}
+            style={{
+              alignSelf: "flex-end",
+              marginTop: 4,
+            }}
+          >
+            {resettingPassword
+              ? "Sending reset link..."
+              : "Forgot password?"}
+          </button>
         </form>
+
+        {resetMessage && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 8,
+              background: "rgba(24, 128, 112, 0.10)",
+            }}
+          >
+            {resetMessage}
+          </div>
+        )}
 
         <div className="loginSecurity">
           <span>🔒</span>
@@ -529,6 +625,7 @@ async function loadRecords() {
   );
 
   const recorderNames: Record<string, string> = {};
+  const recorderFullNames: Record<string, string> = {};
 
   if (recorderIds.length > 0) {
     const {
@@ -551,6 +648,8 @@ async function loadRecords() {
             staff.full_name?.trim() || "";
 
           const nameParts = fullName.split(/\s+/);
+
+recorderFullNames[staff.id] = fullName || "Unknown";
 
 recorderNames[staff.id] =
   nameParts[nameParts.length - 1] ||
@@ -592,14 +691,8 @@ recorderNames[staff.id] =
       patientId: record.patient_id,
       patient: patientName,
 
-      date: recordedDate.toLocaleDateString(
-        undefined,
-        {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        }
-      ),
+      date: formatNumericDate(recordedDate),
+      filterDate: formatFilterDate(recordedDate),
 
       time: recordedDate.toLocaleTimeString(
         undefined,
@@ -611,6 +704,10 @@ recorderNames[staff.id] =
 
       enteredBy:
         recorderNames[record.recorded_by] ||
+        "Unknown",
+
+      enteredByFull:
+        recorderFullNames[record.recorded_by] ||
         "Unknown",
 
       bp: bloodPressure,
@@ -770,11 +867,16 @@ async function handleSignOut() {
   setPatients={setPatients}
   records={records}
   onRecordsChanged={loadRecords}
+  currentUserRole={profile.role}
 />
         )}
 
         {activePage === "Records" && (
-          <Records records={records} />
+          <Records
+            records={records}
+            patients={patients}
+            downloaderName={profile.full_name || session.user.email || "Unknown User"}
+          />
         )}
 
         {activePage === "Users" && profile.role === "admin" && (
@@ -817,14 +919,7 @@ function Dashboard({
   activePatients: number;
   setActivePage: (page: string) => void;
 }) {
-  const today = new Date().toLocaleDateString(
-    undefined,
-    {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }
-  );
+  const today = formatNumericDate(new Date());
 
   const recordsToday = records.filter(
     (record) => record.date === today
@@ -846,12 +941,19 @@ function Dashboard({
       return "—";
     }
 
-    
-
-    return `${value} ${unit}`;
+    return `${value}${unit}`;
   }
 
-  
+  function shouldShowPatientName(
+    record: VitalRecord,
+    index: number
+  ) {
+    return (
+      index === 0 ||
+      recentRecords[index - 1]?.patientId !==
+        record.patientId
+    );
+  }
 
   return (
     <>
@@ -927,33 +1029,49 @@ function Dashboard({
               <thead>
                 <tr>
                   <th>Patient</th>
-                  <th>Date</th>
-                  <th>Time</th>
+                  <th>Date & Time</th>
+                  <th>Entered By</th>
+                  <th>Progress Note</th>
                   <th>BP</th>
                   <th>HR</th>
                   <th>SpO₂</th>
                   <th>Temp</th>
+                  <th>Glycemia</th>
+                  <th>UOP</th>
                 </tr>
               </thead>
 
               <tbody>
                 {recentRecords.length > 0 ? (
-                  recentRecords.map((record) => (
+                  recentRecords.map((record, index) => (
                     <tr key={record.id}>
                       <td className="patientName">
-                        {record.patient}
+                        {shouldShowPatientName(record, index)
+                          ? record.patient
+                          : ""}
                       </td>
 
-                      <td>{record.date}</td>
+                      <td>
+                        {record.date} · {record.time}
+                      </td>
 
-                      <td>{record.time}</td>
+                      <td>{record.enteredBy}</td>
+
+                      <td
+                        style={{
+                          minWidth: 220,
+                          whiteSpace: "normal",
+                        }}
+                      >
+                        {record.note}
+                      </td>
 
                       <td>{record.bp}</td>
 
                       <td>
                         {displayValue(
                           record.heartRate,
-                          "bpm"
+                          " bpm"
                         )}
                       </td>
 
@@ -967,7 +1085,21 @@ function Dashboard({
                       <td>
                         {displayValue(
                           record.temperature,
-                          "°C"
+                          " °C"
+                        )}
+                      </td>
+
+                      <td>
+                        {displayValue(
+                          record.glycemia,
+                          " mg/dL"
+                        )}
+                      </td>
+
+                      <td>
+                        {displayValue(
+                          record.urineOutput,
+                          " mL"
                         )}
                       </td>
                     </tr>
@@ -975,10 +1107,8 @@ function Dashboard({
                 ) : (
                   <tr>
                     <td
-                      colSpan={7}
-                      style={{
-                        textAlign: "center",
-                      }}
+                      colSpan={10}
+                      style={{ textAlign: "center" }}
                     >
                       No patient records yet.
                     </td>
@@ -1054,6 +1184,7 @@ function Dashboard({
     </>
   );
 }
+
 function StatCard({
   title,
   value,
@@ -1366,6 +1497,7 @@ function Patients({
   setPatients,
   records,
   onRecordsChanged,
+  currentUserRole,
 }: {
   patients: Patient[];
   setPatients: React.Dispatch<
@@ -1373,6 +1505,7 @@ function Patients({
   >;
   records: VitalRecord[];
   onRecordsChanged: () => Promise<void>;
+  currentUserRole: "admin" | "caregiver";
 }) {
   const [showForm, setShowForm] = useState(false);
 
@@ -1554,6 +1687,11 @@ const [viewPatientId, setViewPatientId] =
 }
 
   async function togglePatientStatus(id: string) {
+  if (currentUserRole !== "admin") {
+    alert("Only administrators can activate or deactivate patients.");
+    return;
+  }
+
   const patient = patients.find(
     (currentPatient) => currentPatient.id === id
   );
@@ -1706,8 +1844,9 @@ async function handleRecordUpdate() {
           <ProfileItem
             label="Date of Birth"
             value={
-              selectedPatient.dateOfBirth ||
-              "Not entered"
+              selectedPatient.dateOfBirth
+                ? formatStoredDate(selectedPatient.dateOfBirth)
+                : "Not entered"
             }
           />
 
@@ -2089,7 +2228,9 @@ async function handleRecordUpdate() {
                 </td>
 
                 <td>
-                  {patient.dateOfBirth || "-"}
+                  {patient.dateOfBirth
+                    ? formatStoredDate(patient.dateOfBirth)
+                    : "-"}
                 </td>
 
                 <td>{patient.gender || "-"}</td>
@@ -2130,18 +2271,20 @@ async function handleRecordUpdate() {
                       Edit
                     </button>
 
-                    <button
-                      className="tableButton dangerText"
-                      onClick={() =>
-                        togglePatientStatus(
-                          patient.id
-                        )
-                      }
-                    >
-                      {patient.active
-                        ? "Deactivate"
-                        : "Activate"}
-                    </button>
+                    {currentUserRole === "admin" && (
+                      <button
+                        className="tableButton dangerText"
+                        onClick={() =>
+                          togglePatientStatus(
+                            patient.id
+                          )
+                        }
+                      >
+                        {patient.active
+                          ? "Deactivate"
+                          : "Activate"}
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -2419,269 +2562,27 @@ function PatientFormModal({
 
 function Records({
   records,
+  patients,
+  downloaderName,
 }: {
   records: VitalRecord[];
+  patients: Patient[];
+  downloaderName: string;
 }) {
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [showDownloadOptions, setShowDownloadOptions] =
-  useState(false);
+    useState(false);
 
-  function formatRecordDateForFilter(
-    dateString: string
-  ) {
-    const date = new Date(dateString);
-
-    if (Number.isNaN(date.getTime())) {
-      return "";
-    }
-
-    const year = date.getFullYear();
-
-    const month = String(
-      date.getMonth() + 1
-    ).padStart(2, "0");
-
-    const day = String(
-      date.getDate()
-    ).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  const filteredRecords = records.filter(
-    (record) => {
-      const matchesSearch =
-        record.patient
-          .toLowerCase()
-          .includes(search.toLowerCase());
-
-      const recordDate =
-        formatRecordDateForFilter(record.date);
-
-      const matchesFrom =
-        !fromDate || recordDate >= fromDate;
-
-      const matchesTo =
-        !toDate || recordDate <= toDate;
-
-function downloadRecords(
-  mode: "vitals" | "notes" | "both"
-) {
-  if (filteredRecords.length === 0) {
-    alert("There are no records to download.");
-    return;
-  }
-
-  let headers: string[] = [];
-  let rows: string[][] = [];
-
-  if (mode === "vitals") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "BP",
-      "Heart Rate",
-      "SpO2",
-      "Temperature",
-      "Glycemia",
-      "Urine Output",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.bp,
-      record.heartRate,
-      record.spo2,
-      record.temperature,
-      record.glycemia,
-      record.urineOutput,
-    ]);
-  }
-
-  if (mode === "notes") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "Progress Note",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.note,
-    ]);
-  }
-
-  if (mode === "both") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "BP",
-      "Heart Rate",
-      "SpO2",
-      "Temperature",
-      "Glycemia",
-      "Urine Output",
-      "Progress Note",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.bp,
-      record.heartRate,
-      record.spo2,
-      record.temperature,
-      record.glycemia,
-      record.urineOutput,
-      record.note,
-    ]);
-  }
-
-  const escapeCsv = (value: string) =>
-    `"${String(value ?? "")
-      .replace(/"/g, '""')}"`;
-
-  const csvContent = [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((row) =>
-      row.map(escapeCsv).join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], {
-    type: "text/csv;charset=utf-8;",
+  const [visibleVitals, setVisibleVitals] = useState({
+    bp: true,
+    heartRate: true,
+    spo2: true,
+    temperature: true,
+    glycemia: true,
+    urineOutput: true,
   });
-
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = url;
-
-  link.download =
-    mode === "vitals"
-      ? "homecare-vitals.csv"
-      : mode === "notes"
-      ? "homecare-progress-notes.csv"
-      : "homecare-vitals-and-notes.csv";
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-
-  setShowDownloadOptions(false);
-}
-
-      return (
-        matchesSearch &&
-        matchesFrom &&
-        matchesTo
-      );
-    }
-  );
-
-  function downloadRecords(
-  mode: "vitals" | "notes" | "both"
-) {
-  if (filteredRecords.length === 0) {
-    alert("There are no records to download.");
-    return;
-  }
-
-  let headers: string[] = [];
-  let rows: string[][] = [];
-
-  if (mode === "vitals") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "BP",
-      "Heart Rate",
-      "SpO2",
-      "Temperature",
-      "Glycemia",
-      "Urine Output",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.bp,
-      record.heartRate,
-      record.spo2,
-      record.temperature,
-      record.glycemia,
-      record.urineOutput,
-    ]);
-  }
-
-  if (mode === "notes") {
-    headers = [
-      "Date",
-      "Time",
-      "Patient",
-      "Progress Note",
-    ];
-
-    rows = filteredRecords.map((record) => [
-      record.date,
-      record.time,
-      record.patient,
-      record.note,
-    ]);
-  }
-
-  
-
-  const escapeCsv = (value: string) =>
-    `"${String(value ?? "").replace(/"/g, '""')}"`;
-
-  const csvContent = [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((row) =>
-      row.map(escapeCsv).join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], {
-    type: "text/csv;charset=utf-8;",
-  });
-
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = url;
-
-  link.download =
-    mode === "vitals"
-      ? "homecare-vitals.csv"
-      : mode === "notes"
-      ? "homecare-progress-notes.csv"
-      : "homecare-vitals-and-notes.csv";
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-
-  setShowDownloadOptions(false);
-}
 
   function displayValue(
     value: string,
@@ -2693,7 +2594,441 @@ function downloadRecords(
 
     return `${value}${unit}`;
   }
-  
+
+  const vitalColumns = [
+    {
+      key: "bp" as const,
+      label: "BP",
+      downloadLabel: "BP",
+      value: (record: VitalRecord) => record.bp,
+      display: (record: VitalRecord) => record.bp,
+    },
+    {
+      key: "heartRate" as const,
+      label: "HR",
+      downloadLabel: "Heart Rate",
+      value: (record: VitalRecord) => record.heartRate,
+      display: (record: VitalRecord) =>
+        displayValue(record.heartRate, " bpm"),
+    },
+    {
+      key: "spo2" as const,
+      label: "SpO₂",
+      downloadLabel: "SpO2",
+      value: (record: VitalRecord) => record.spo2,
+      display: (record: VitalRecord) =>
+        displayValue(record.spo2, "%"),
+    },
+    {
+      key: "temperature" as const,
+      label: "Temp",
+      downloadLabel: "Temperature",
+      value: (record: VitalRecord) => record.temperature,
+      display: (record: VitalRecord) =>
+        displayValue(record.temperature, " °C"),
+    },
+    {
+      key: "glycemia" as const,
+      label: "Glycemia",
+      downloadLabel: "Glycemia",
+      value: (record: VitalRecord) => record.glycemia,
+      display: (record: VitalRecord) =>
+        displayValue(record.glycemia, " mg/dL"),
+    },
+    {
+      key: "urineOutput" as const,
+      label: "UOP",
+      downloadLabel: "Urine Output",
+      value: (record: VitalRecord) => record.urineOutput,
+      display: (record: VitalRecord) =>
+        displayValue(record.urineOutput, " mL"),
+    },
+  ];
+
+  const selectedVitalColumns = vitalColumns.filter(
+    (column) => visibleVitals[column.key]
+  );
+
+  const filteredRecords = records.filter((record) => {
+    const searchValue = search.toLowerCase().trim();
+
+    const matchesSearch =
+      !searchValue ||
+      record.patient.toLowerCase().includes(searchValue);
+
+    const matchesFrom =
+      !fromDate || record.filterDate >= fromDate;
+
+    const matchesTo =
+      !toDate || record.filterDate <= toDate;
+
+    return matchesSearch && matchesFrom && matchesTo;
+  });
+
+  const uniquePatientIds = Array.from(
+    new Set(filteredRecords.map((record) => record.patientId))
+  );
+
+  const singlePatient =
+    uniquePatientIds.length === 1
+      ? patients.find(
+          (patient) => patient.id === uniquePatientIds[0]
+        ) || null
+      : null;
+
+  function shouldShowPatientName(
+    record: VitalRecord,
+    index: number
+  ) {
+    return (
+      index === 0 ||
+      filteredRecords[index - 1]?.patientId !==
+        record.patientId
+    );
+  }
+
+  function toggleVital(
+    key: keyof typeof visibleVitals
+  ) {
+    setVisibleVitals((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  }
+
+  function escapeCsv(value: string) {
+    return `"${String(value ?? "").replace(/"/g, '""')}"`;
+  }
+
+  function escapeHtml(value: string) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function startDownload(
+    blob: Blob,
+    fileName: string
+  ) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = fileName;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+    setShowDownloadOptions(false);
+  }
+
+  function downloadRecords(
+    mode: "vitals" | "notes" | "both"
+  ) {
+    if (filteredRecords.length === 0) {
+      alert("There are no records to download.");
+      return;
+    }
+
+    if (mode === "vitals") {
+      const headers = [
+        "Patient",
+        "Date & Time",
+        "Entered By",
+        ...selectedVitalColumns.map(
+          (column) => column.downloadLabel
+        ),
+      ];
+
+      const rows = filteredRecords.map((record, index) => [
+        shouldShowPatientName(record, index)
+          ? record.patient
+          : "",
+        `${record.date} ${record.time}`,
+        record.enteredBy,
+        ...selectedVitalColumns.map(
+          (column) => column.value(record)
+        ),
+      ]);
+
+      const csvContent = [
+        headers.map(escapeCsv).join(","),
+        ...rows.map((row) =>
+          row.map(escapeCsv).join(",")
+        ),
+      ].join("\n");
+
+      const blob = new Blob(
+        ["\uFEFF" + csvContent],
+        {
+          type: "text/csv;charset=utf-8;",
+        }
+      );
+
+      startDownload(
+        blob,
+        "homecare-vitals.csv"
+      );
+      return;
+    }
+
+    const includeVitals = mode === "both";
+
+    const wordHeaders = [
+      "Patient",
+      "Date & Time",
+      "Entered By",
+      "Progress Note",
+      ...(includeVitals
+        ? selectedVitalColumns.map(
+            (column) => column.downloadLabel
+          )
+        : []),
+    ];
+
+    const wordRows = filteredRecords.map((record, index) => [
+      shouldShowPatientName(record, index)
+        ? record.patient
+        : "",
+      `${record.date} · ${record.time}`,
+      record.enteredBy,
+      record.note,
+      ...(includeVitals
+        ? selectedVitalColumns.map(
+            (column) => column.value(record)
+          )
+        : []),
+    ]);
+
+    const headerHtml = wordHeaders
+      .map(
+        (header) =>
+          `<th>${escapeHtml(header)}</th>`
+      )
+      .join("");
+
+    const rowsHtml = wordRows
+      .map(
+        (row) =>
+          `<tr>${row
+            .map(
+              (value, index) =>
+                `<td${
+                  index === 3
+                    ? ' class="progress-note"'
+                    : ""
+                }>${escapeHtml(value)}</td>`
+            )
+            .join("")}</tr>`
+      )
+      .join("");
+
+    const patientDetailsHtml = singlePatient
+      ? `
+        <div class="patient-details">
+          <h2>Patient Details</h2>
+          <div class="patient-detail-line"><strong>Name:</strong> ${escapeHtml(
+            `${singlePatient.firstName} ${singlePatient.lastName}`
+          )}</div>
+          <div class="patient-detail-line"><strong>Patient Code:</strong> ${escapeHtml(
+            singlePatient.patientCode
+          )}</div>
+          <div class="patient-detail-line"><strong>Date of Birth:</strong> ${escapeHtml(
+            singlePatient.dateOfBirth
+              ? formatStoredDate(singlePatient.dateOfBirth)
+              : "Not entered"
+          )}</div>
+          <div class="patient-detail-line"><strong>Gender:</strong> ${escapeHtml(
+            singlePatient.gender || "Not entered"
+          )}</div>
+          <div class="patient-detail-line"><strong>Phone:</strong> ${escapeHtml(
+            singlePatient.phone || "Not entered"
+          )}</div>
+          <div class="patient-detail-line"><strong>Address:</strong> ${escapeHtml(
+            singlePatient.address || "Not entered"
+          )}</div>
+        </div>
+      `
+      : `
+        <div class="patient-details">
+          <h2>Patient Details</h2>
+          <p>Multiple patients are included in this report.</p>
+        </div>
+      `;
+
+    const downloaderHtml = `
+      <div class="signature-section">
+        <h2>Caregiver Electronic Record Details</h2>
+        <div class="downloaded-by">
+          <strong>Downloaded By:</strong> ${escapeHtml(downloaderName)}
+        </div>
+      </div>
+    `;
+
+    const documentTitle =
+      mode === "notes"
+        ? "Progress Notes"
+        : "Vitals and Progress Notes";
+
+    const wordDocument = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(documentTitle)}</title>
+          <style>
+            @page {
+              size: landscape;
+              margin: 0.5in;
+            }
+
+            body {
+              font-family: Arial, sans-serif;
+              font-size: 9pt;
+              color: #111827;
+              margin: 0;
+            }
+
+            .company {
+              text-align: center;
+              margin-bottom: 16px;
+            }
+
+            .company h1 {
+              margin: 0;
+              font-size: 20pt;
+            }
+
+            .company p {
+              margin: 4px 0 0;
+              color: #4b5563;
+            }
+
+            h2 {
+              font-size: 12pt;
+              margin: 16px 0 8px;
+            }
+
+            .subtitle {
+              margin-top: 4px;
+              font-size: 11pt;
+              font-weight: 700;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            .patient-details {
+              margin-bottom: 18px;
+            }
+
+            .patient-detail-line {
+              margin: 4px 0;
+              line-height: 1.45;
+            }
+
+            th,
+            td {
+              border: 1px solid #cbd5e1;
+              padding: 6px;
+              vertical-align: top;
+              text-align: left;
+              overflow-wrap: anywhere;
+            }
+
+            th {
+              background: #eef6f5;
+              font-weight: 700;
+            }
+
+            .records-table {
+              table-layout: fixed;
+            }
+
+            .records-table th:nth-child(1),
+            .records-table td:nth-child(1) {
+              width: 15%;
+            }
+
+            .records-table th:nth-child(2),
+            .records-table td:nth-child(2) {
+              width: 12%;
+            }
+
+            .records-table th:nth-child(3),
+            .records-table td:nth-child(3) {
+              width: 10%;
+            }
+
+            .records-table th:nth-child(4),
+            .records-table td:nth-child(4) {
+              width: 28%;
+            }
+
+            .progress-note {
+              white-space: pre-wrap;
+              line-height: 1.35;
+            }
+
+            .signature-section {
+              margin-top: 20px;
+              page-break-inside: avoid;
+            }
+
+            .downloaded-by {
+              margin-top: 6px;
+              line-height: 1.45;
+            }
+          </style>
+        </head>
+
+        <body>
+          <div class="company">
+            <h1>HomeCare</h1>
+            <p>Patient Monitor</p>
+            <div class="subtitle">
+              ${escapeHtml(documentTitle)}
+            </div>
+          </div>
+
+          ${patientDetailsHtml}
+
+          <table class="records-table">
+            <thead>
+              <tr>${headerHtml}</tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          ${downloaderHtml}
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob(
+      ["\uFEFF", wordDocument],
+      {
+        type: "application/msword;charset=utf-8;",
+      }
+    );
+
+    startDownload(
+      blob,
+      mode === "notes"
+        ? "homecare-progress-notes.doc"
+        : "homecare-vitals-and-notes.doc"
+    );
+  }
+
   return (
     <section className="panel">
       <div className="panelHeader">
@@ -2701,16 +3036,19 @@ function downloadRecords(
           <h3>Patient records</h3>
 
           <p>
-            Search and filter patient observations.
+            Search, filter and choose which vital signs
+            you want to display.
           </p>
         </div>
 
         <button
-  className="secondaryButton"
-  onClick={() => setShowDownloadOptions(true)}
->
-  Download Records
-</button>
+          className="secondaryButton"
+          onClick={() =>
+            setShowDownloadOptions(true)
+          }
+        >
+          Download Records
+        </button>
       </div>
 
       <div className="filters">
@@ -2768,79 +3106,114 @@ function downloadRecords(
         </div>
       </div>
 
+      <div
+        style={{
+          marginTop: 18,
+          marginBottom: 18,
+          padding: 14,
+          border: "1px solid #dbe3e6",
+          borderRadius: 10,
+        }}
+      >
+        <strong
+          style={{
+            display: "block",
+            marginBottom: 10,
+          }}
+        >
+          Vitals to display
+        </strong>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 14,
+          }}
+        >
+          {vitalColumns.map((column) => (
+            <label
+              key={column.key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={visibleVitals[column.key]}
+                onChange={() =>
+                  toggleVital(column.key)
+                }
+              />
+              {column.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <div className="tableWrapper">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Time</th>
               <th>Patient</th>
-              <th>BP</th>
-              <th>HR</th>
-              <th>SpO₂</th>
-              <th>Temp</th>
-              <th>Glycemia</th>
-              <th>UOP</th>
+              <th>Date & Time</th>
+              <th>Entered By</th>
+              <th>Progress Note</th>
+
+              {selectedVitalColumns.map(
+                (column) => (
+                  <th key={column.key}>
+                    {column.label}
+                  </th>
+                )
+              )}
             </tr>
           </thead>
 
           <tbody>
             {filteredRecords.length > 0 ? (
-              filteredRecords.map((record) => (
+              filteredRecords.map((record, index) => (
                 <tr key={record.id}>
-                  <td>{record.date}</td>
-
-                  <td>{record.time}</td>
-
                   <td className="patientName">
-                    {record.patient}
-                  </td>
-
-                  <td>{record.bp}</td>
-
-                  <td>
-                    {displayValue(
-                      record.heartRate,
-                      " bpm"
-                    )}
+                    {shouldShowPatientName(record, index)
+                      ? record.patient
+                      : ""}
                   </td>
 
                   <td>
-                    {displayValue(
-                      record.spo2,
-                      "%"
-                    )}
+                    {record.date} · {record.time}
                   </td>
 
-                  <td>
-                    {displayValue(
-                      record.temperature,
-                      " °C"
-                    )}
+                  <td>{record.enteredBy}</td>
+
+                  <td
+                    style={{
+                      minWidth: 220,
+                      whiteSpace: "normal",
+                    }}
+                  >
+                    {record.note}
                   </td>
 
-                  <td>
-                    {displayValue(
-                      record.glycemia,
-                      " mg/dL"
-                    )}
-                  </td>
-
-                  <td>
-                    {displayValue(
-                      record.urineOutput,
-                      " mL"
-                    )}
-                  </td>
+                  {selectedVitalColumns.map(
+                    (column) => (
+                      <td key={column.key}>
+                        {column.display(record)}
+                      </td>
+                    )
+                  )}
                 </tr>
               ))
             ) : (
               <tr>
                 <td
-                  colSpan={9}
-                  style={{
-                    textAlign: "center",
-                  }}
+                  colSpan={
+                    4 + selectedVitalColumns.length
+                  }
+                  style={{ textAlign: "center" }}
                 >
                   No records found.
                 </td>
@@ -2848,7 +3221,7 @@ function downloadRecords(
             )}
           </tbody>
         </table>
-            </div>
+      </div>
 
       {showDownloadOptions && (
         <div className="modalOverlay">
@@ -2856,8 +3229,10 @@ function downloadRecords(
             <div className="panelHeader">
               <div>
                 <h3>Download Records</h3>
+
                 <p>
-                  Choose what you want to include.
+                  Downloads use the current patient/date
+                  filters and your selected vital signs.
                 </p>
               </div>
 
@@ -2874,33 +3249,38 @@ function downloadRecords(
 
             <div className="formActions">
               <button
-  type="button"
-  className="secondaryButton"
-  onClick={() => downloadRecords("vitals")}
->
-  Vitals Only
-</button>
+                type="button"
+                className="secondaryButton"
+                onClick={() =>
+                  downloadRecords("vitals")
+                }
+              >
+                Vitals Only (CSV)
+              </button>
 
-<button
-  type="button"
-  className="secondaryButton"
-  onClick={() => downloadRecords("notes")}
->
-  Progress Notes Only
-</button>
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={() =>
+                  downloadRecords("notes")
+                }
+              >
+                Progress Notes (Word)
+              </button>
 
-<button
-  type="button"
-  className="primaryButton"
-  onClick={() => downloadRecords("both")}
->
-  Vitals + Notes
-</button>
+              <button
+                type="button"
+                className="primaryButton"
+                onClick={() =>
+                  downloadRecords("both")
+                }
+              >
+                Vitals + Notes (Word)
+              </button>
             </div>
           </div>
         </div>
       )}
-
     </section>
   );
 }
