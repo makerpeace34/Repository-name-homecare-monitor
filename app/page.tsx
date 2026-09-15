@@ -119,6 +119,9 @@ function formatStoredDate(dateString: string) {
 }
 
 export default function Home() {
+  useEffect(() => {
+    document.title = "Healthy HomeCare";
+  }, []);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -315,7 +318,7 @@ function LoginScreen({
     const { error } = await supabase.auth.resetPasswordForEmail(
       cleanEmail,
       {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: "https://healthyhomecare.vercel.app/",
       }
     );
 
@@ -652,10 +655,9 @@ async function loadRecords() {
     const {
       data: recorderProfiles,
       error: profileError,
-    } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", recorderIds);
+    } = await supabase.rpc("get_homecare_staff_names", {
+      staff_ids: recorderIds,
+    });
 
     if (profileError) {
       console.error(
@@ -1355,6 +1357,7 @@ function StaffRoster({
         shift_date: databaseDate(date),
         shift,
         user_id: session.user.id,
+        assigned_by: session.user.id,
       });
 
     if (error) {
@@ -1414,7 +1417,10 @@ function StaffRoster({
     if (existing) {
       const { error } = await supabase
         .from("staff_roster")
-        .update({ user_id: selectedStaffId })
+        .update({
+          user_id: selectedStaffId,
+          assigned_by: session.user.id,
+        })
         .eq("id", existing.id);
 
       if (error) {
@@ -1428,6 +1434,7 @@ function StaffRoster({
           shift_date: editingCell.date,
           shift: editingCell.shift,
           user_id: selectedStaffId,
+          assigned_by: session.user.id,
         });
 
       if (error) {
