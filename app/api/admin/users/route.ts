@@ -1,46 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL!;
-
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getAdminClient() {
-  return createClient(
-    supabaseUrl,
-    supabaseServiceKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 }
 
-async function verifyAdministrator(
-  request: NextRequest
-) {
-  const authorization =
-    request.headers.get("authorization");
+function isValidRwandaPhone(phoneNumber: string) {
+  return /^\+2507\d{8}$/.test(phoneNumber);
+}
 
-  if (
-    !authorization ||
-    !authorization.startsWith("Bearer ")
-  ) {
+async function verifyAdministrator(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+
+  if (!authorization || !authorization.startsWith("Bearer ")) {
     return {
       error: "Not authenticated.",
       status: 401,
     };
   }
 
-  const token = authorization.replace(
-    "Bearer ",
-    ""
-  );
-
+  const token = authorization.replace("Bearer ", "");
   const adminClient = getAdminClient();
 
   const {
@@ -55,10 +42,7 @@ async function verifyAdministrator(
     };
   }
 
-  const {
-    data: profile,
-    error: profileError,
-  } = await adminClient
+  const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("id, full_name, role, active")
     .eq("id", user.id)
@@ -71,8 +55,7 @@ async function verifyAdministrator(
     !profile.active
   ) {
     return {
-      error:
-        "Administrator access is required.",
+      error: "Administrator access is required.",
       status: 403,
     };
   }
@@ -83,11 +66,8 @@ async function verifyAdministrator(
   };
 }
 
-export async function GET(
-  request: NextRequest
-) {
-  const verification =
-    await verifyAdministrator(request);
+export async function GET(request: NextRequest) {
+  const verification = await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -102,10 +82,7 @@ export async function GET(
 
   const { adminClient } = verification;
 
-  const {
-    data: authData,
-    error: authError,
-  } =
+  const { data: authData, error: authError } =
     await adminClient.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
@@ -122,13 +99,10 @@ export async function GET(
     );
   }
 
-  const {
-    data: profiles,
-    error: profilesError,
-  } = await adminClient
+  const { data: profiles, error: profilesError } = await adminClient
     .from("profiles")
     .select(
-      "id, full_name, role, active, created_at"
+      "id, full_name, phone_number, role, active, created_at"
     );
 
   if (profilesError) {
@@ -142,44 +116,36 @@ export async function GET(
     );
   }
 
-  const users = authData.users.map(
-    (authUser) => {
-      const profile = profiles?.find(
-        (item) => item.id === authUser.id
-      );
+  const users = authData.users.map((authUser) => {
+    const profile = profiles?.find(
+      (item) => item.id === authUser.id
+    );
 
-      return {
-        id: authUser.id,
+    return {
+      id: authUser.id,
 
-        email:
-          authUser.email || "",
+      email: authUser.email || "",
 
-        fullName:
-          profile?.full_name || "",
+      fullName: profile?.full_name || "",
 
-        role:
-          profile?.role || "caregiver",
+      phoneNumber: profile?.phone_number || "",
 
-        active:
-          profile?.active ?? true,
+      role: profile?.role || "caregiver",
 
-        createdAt:
-          profile?.created_at ||
-          authUser.created_at,
-      };
-    }
-  );
+      active: profile?.active ?? true,
+
+      createdAt:
+        profile?.created_at || authUser.created_at,
+    };
+  });
 
   return NextResponse.json({
     users,
   });
 }
 
-export async function POST(
-  request: NextRequest
-) {
-  const verification =
-    await verifyAdministrator(request);
+export async function POST(request: NextRequest) {
+  const verification = await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -197,24 +163,20 @@ export async function POST(
   try {
     const body = await request.json();
 
-    const fullName = String(
-      body.fullName || ""
-    ).trim();
+    const fullName = String(body.fullName || "").trim();
 
-    const email = String(
-      body.email || ""
-    )
+    const email = String(body.email || "")
       .trim()
       .toLowerCase();
 
-    const password = String(
-      body.password || ""
-    );
+    const phoneNumber = String(
+      body.phoneNumber || ""
+    ).trim();
+
+    const password = String(body.password || "");
 
     const role =
-      body.role === "admin"
-        ? "admin"
-        : "caregiver";
+      body.role === "admin" ? "admin" : "caregiver";
 
     if (!fullName) {
       return NextResponse.json(
@@ -238,6 +200,29 @@ export async function POST(
       );
     }
 
+    if (!phoneNumber) {
+      return NextResponse.json(
+        {
+          error: "Phone number is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!isValidRwandaPhone(phoneNumber)) {
+      return NextResponse.json(
+        {
+          error:
+            "Enter the phone number in Rwanda international format, for example +250788123456.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
     if (password.length < 8) {
       return NextResponse.json(
         {
@@ -250,26 +235,18 @@ export async function POST(
       );
     }
 
-    const {
-      data: newUserData,
-      error: createError,
-    } =
-      await adminClient.auth.admin.createUser(
-        {
-          email,
-          password,
-          email_confirm: true,
+    const { data: newUserData, error: createError } =
+      await adminClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
 
-          user_metadata: {
-            full_name: fullName,
-          },
-        }
-      );
+        user_metadata: {
+          full_name: fullName,
+        },
+      });
 
-    if (
-      createError ||
-      !newUserData.user
-    ) {
+    if (createError || !newUserData.user) {
       return NextResponse.json(
         {
           error:
@@ -282,13 +259,12 @@ export async function POST(
       );
     }
 
-    const {
-      error: profileError,
-    } = await adminClient
+    const { error: profileError } = await adminClient
       .from("profiles")
       .upsert({
         id: newUserData.user.id,
         full_name: fullName,
+        phone_number: phoneNumber,
         role,
         active: true,
       });
@@ -300,8 +276,7 @@ export async function POST(
 
       return NextResponse.json(
         {
-          error:
-            profileError.message,
+          error: profileError.message,
         },
         {
           status: 500,
@@ -314,6 +289,7 @@ export async function POST(
         id: newUserData.user.id,
         email,
         fullName,
+        phoneNumber,
         role,
         active: true,
       },
@@ -329,11 +305,9 @@ export async function POST(
     );
   }
 }
-export async function PATCH(
-  request: NextRequest
-) {
-  const verification =
-    await verifyAdministrator(request);
+
+export async function PATCH(request: NextRequest) {
+  const verification = await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -346,68 +320,128 @@ export async function PATCH(
     );
   }
 
-  const { adminClient, user: currentAdmin } =
-    verification;
+  const { adminClient, user: currentAdmin } = verification;
 
   try {
     const body = await request.json();
 
-const userId = String(body.userId || "");
-const active = body.active;
-const newPassword = String(body.newPassword || "");
+    const userId = String(body.userId || "").trim();
+    const active = body.active;
+    const newPassword = String(body.newPassword || "");
 
-if (!userId) {
-  return NextResponse.json(
-    {
-      error: "User ID is required.",
-    },
-    {
-      status: 400,
+    const hasPhoneNumber =
+      Object.prototype.hasOwnProperty.call(
+        body,
+        "phoneNumber"
+      );
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "User ID is required.",
+        },
+        {
+          status: 400,
+        }
+      );
     }
-  );
-}
 
-if (newPassword) {
-  if (newPassword.length < 8) {
-    return NextResponse.json(
-      {
-        error:
-          "Temporary password must contain at least 8 characters.",
-      },
-      {
-        status: 400,
+    // Update phone number
+    if (hasPhoneNumber) {
+      const phoneNumber = String(
+        body.phoneNumber || ""
+      ).trim();
+
+      if (!phoneNumber) {
+        return NextResponse.json(
+          {
+            error: "Phone number is required.",
+          },
+          {
+            status: 400,
+          }
+        );
       }
-    );
-  }
 
-  const { error: passwordError } =
-    await adminClient.auth.admin.updateUserById(
-      userId,
-      {
-        password: newPassword,
+      if (!isValidRwandaPhone(phoneNumber)) {
+        return NextResponse.json(
+          {
+            error:
+              "Enter the phone number in Rwanda international format, for example +250788123456.",
+          },
+          {
+            status: 400,
+          }
+        );
       }
-    );
 
-  if (passwordError) {
-    return NextResponse.json(
-      {
-        error: passwordError.message,
-      },
-      {
-        status: 500,
+      const { error: phoneError } = await adminClient
+        .from("profiles")
+        .update({
+          phone_number: phoneNumber,
+        })
+        .eq("id", userId);
+
+      if (phoneError) {
+        return NextResponse.json(
+          {
+            error: phoneError.message,
+          },
+          {
+            status: 500,
+          }
+        );
       }
-    );
-  }
 
-  return NextResponse.json({
-    success: true,
-  });
-}
+      return NextResponse.json({
+        success: true,
+        phoneNumber,
+      });
+    }
 
+    // Reset password
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        return NextResponse.json(
+          {
+            error:
+              "Temporary password must contain at least 8 characters.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const { error: passwordError } =
+        await adminClient.auth.admin.updateUserById(
+          userId,
+          {
+            password: newPassword,
+          }
+        );
+
+      if (passwordError) {
+        return NextResponse.json(
+          {
+            error: passwordError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+      });
+    }
+
+    // Activate / deactivate user
     if (typeof active !== "boolean") {
       return NextResponse.json(
         {
-          error: "Invalid user status.",
+          error: "Invalid user update.",
         },
         {
           status: 400,
@@ -430,9 +464,7 @@ if (newPassword) {
       );
     }
 
-    const {
-      error: updateError,
-    } = await adminClient
+    const { error: updateError } = await adminClient
       .from("profiles")
       .update({
         active,
@@ -464,4 +496,3 @@ if (newPassword) {
     );
   }
 }
-

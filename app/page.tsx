@@ -51,6 +51,7 @@ type PatientFormData = {
 type Profile = {
   id: string;
   full_name: string | null;
+  phone_number: string | null;
   role: "admin" | "caregiver";
   active: boolean;
 };
@@ -175,7 +176,7 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, role, active")
+        .select("id, full_name, phone_number, role, active")
         .eq("id", session.user.id)
         .single();
 
@@ -1385,6 +1386,62 @@ function StaffRoster({
     handleCaregiverCell(date, shift);
   }
 
+  async function sendRosterSms(
+    userId: string,
+    action: "assigned" | "removed",
+    shiftDate: string,
+    shift: "day" | "night"
+  ) {
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+
+    const token = currentSession?.access_token;
+
+    if (!token) {
+      alert(
+        "The shift was saved, but the SMS could not be sent because your login session could not be verified."
+      );
+      return false;
+    }
+
+    try {
+      const response = await fetch("/api/roster-sms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          action,
+          shiftDate,
+          shift,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Roster SMS error:", data);
+        alert(
+          `The shift was saved, but the SMS could not be sent: ${
+            data.error || "Unknown SMS error."
+          }`
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Roster SMS error:", error);
+      alert(
+        "The shift was saved, but the SMS could not be sent."
+      );
+      return false;
+    }
+  }
+
   async function saveAdminAssignment() {
     if (!editingCell) {
       return;
@@ -1396,6 +1453,13 @@ function StaffRoster({
         item.shift === editingCell.shift
     );
 
+    // Nothing actually changed.
+    if (existing?.userId === selectedStaffId) {
+      setEditingCell(null);
+      return;
+    }
+
+    // Admin cleared an existing shift.
     if (!selectedStaffId) {
       if (existing) {
         const { error } = await supabase
@@ -1407,6 +1471,13 @@ function StaffRoster({
           alert(error.message);
           return;
         }
+
+        await sendRosterSms(
+          existing.userId,
+          "removed",
+          editingCell.date,
+          editingCell.shift
+        );
       }
 
       setEditingCell(null);
@@ -1414,7 +1485,10 @@ function StaffRoster({
       return;
     }
 
+    // Admin changed the staff member already assigned to this shift.
     if (existing) {
+      const previousStaffId = existing.userId;
+
       const { error } = await supabase
         .from("staff_roster")
         .update({
@@ -1427,7 +1501,22 @@ function StaffRoster({
         alert(error.message);
         return;
       }
+
+      await sendRosterSms(
+        previousStaffId,
+        "removed",
+        editingCell.date,
+        editingCell.shift
+      );
+
+      await sendRosterSms(
+        selectedStaffId,
+        "assigned",
+        editingCell.date,
+        editingCell.shift
+      );
     } else {
+      // Admin assigned an empty shift.
       const { error } = await supabase
         .from("staff_roster")
         .insert({
@@ -1441,6 +1530,13 @@ function StaffRoster({
         alert(error.message);
         return;
       }
+
+      await sendRosterSms(
+        selectedStaffId,
+        "assigned",
+        editingCell.date,
+        editingCell.shift
+      );
     }
 
     setEditingCell(null);
@@ -4046,6 +4142,7 @@ type AppUser = {
   id: string;
   email: string;
   fullName: string;
+  phoneNumber: string;
   role: string;
   active: boolean;
 };
@@ -4058,8 +4155,9 @@ function Users() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("caregiver");
+const [phoneNumber, setPhoneNumber] = useState("");
+const [password, setPassword] = useState("");
+const [role, setRole] = useState("caregiver");
   const [creatingUser, setCreatingUser] =
     useState(false);
 
@@ -4154,6 +4252,13 @@ function Users() {
   ) {
     event.preventDefault();
 
+    const cleanPhoneNumber = phoneNumber.trim();
+
+    if (!/^\+2507\d{8}$/.test(cleanPhoneNumber)) {
+      alert("Enter the phone number in Rwanda international format, for example +250788123456.");
+      return;
+    }
+
     setCreatingUser(true);
 
     const token = await getAccessToken();
@@ -4175,6 +4280,7 @@ function Users() {
         body: JSON.stringify({
           fullName,
           email,
+          phoneNumber: cleanPhoneNumber,
           password,
           role,
         }),
@@ -4193,6 +4299,7 @@ function Users() {
 
     setFullName("");
     setEmail("");
+    setPhoneNumber("");
     setPassword("");
     setRole("caregiver");
     setShowCreateUser(false);
@@ -4242,6 +4349,65 @@ async function toggleUserStatus(
   }
 
   await loadUsers();
+}
+
+async function editUserPhone(user: AppUser) {
+  const value = window.prompt(
+    `Enter the phone number for ${user.fullName || user.email}:`,
+    user.phoneNumber || "+2507"
+  );
+
+  if (value === null) {
+    return;
+  }
+
+  const cleanPhoneNumber = value.trim();
+
+  if (!/^\+2507\d{8}$/.test(cleanPhoneNumber)) {
+    alert(
+      "Enter the phone number in Rwanda international format, for example +250788123456."
+    );
+    return;
+  }
+
+  const {
+    data: { session: currentSession },
+  } = await supabase.auth.getSession();
+
+  const token = currentSession?.access_token;
+
+  if (!token) {
+    alert("Your login session could not be verified.");
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        phoneNumber: cleanPhoneNumber,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || "Could not update phone number.");
+      return;
+    }
+
+    await loadUsers();
+
+    alert("Phone number updated successfully.");
+  } catch (error) {
+    console.error("Phone update error:", error);
+    alert("Could not update phone number.");
+  }
 }
 
 async function resetUserPassword(
@@ -4365,6 +4531,21 @@ async function resetUserPassword(
             </div>
 
             <div className="field">
+              <label>Phone Number</label>
+
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(event) =>
+                  setPhoneNumber(event.target.value)
+                }
+                placeholder="+250788123456"
+                pattern="\+2507[0-9]{8}"
+                required
+              />
+            </div>
+
+            <div className="field">
               <label>Temporary Password</label>
 
               <input
@@ -4428,6 +4609,7 @@ async function resetUserPassword(
             <tr>
               <th>Name</th>
               <th>Email</th>
+              <th>Phone</th>
               <th>Role</th>
               <th>Status</th>
               <th>Actions</th>
@@ -4437,7 +4619,7 @@ async function resetUserPassword(
           <tbody>
             {loadingUsers ? (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={6}>
                   Loading users...
                 </td>
               </tr>
@@ -4451,6 +4633,8 @@ async function resetUserPassword(
       </td>
 
       <td>{user.email}</td>
+
+      <td>{user.phoneNumber || "Not entered"}</td>
 
       <td>
         {user.role === "admin"
@@ -4466,39 +4650,39 @@ async function resetUserPassword(
 
       <td>
   <div
-    style={{
-      display: "flex",
-      gap: "10px",
-      alignItems: "center",
-    }}
-  >
-    <button
-      className="tableButton"
-      onClick={() =>
-        toggleUserStatus(user)
-      }
-    >
-      {user.active
-        ? "Deactivate"
-        : "Activate"}
-    </button>
-
-    <button
-  className="tableButton"
-  style={{ marginLeft: "16px" }}
-  onClick={() =>
-    resetUserPassword(user)
-  }
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  }}
 >
-  Reset Password
-</button>
-  </div>
+  <button
+    className="tableButton"
+    onClick={() => toggleUserStatus(user)}
+  >
+    {user.active ? "Deactivate" : "Activate"}
+  </button>
+
+  <button
+    className="tableButton"
+    onClick={() => editUserPhone(user)}
+  >
+    Edit Phone
+  </button>
+
+  <button
+    className="tableButton"
+    onClick={() => resetUserPassword(user)}
+  >
+    Reset Password
+  </button>
+</div>
 </td>
     </tr>
   ))
 ) : (
   <tr>
-    <td colSpan={5}>
+    <td colSpan={6}>
       No users found.
     </td>
   </tr>
@@ -4601,6 +4785,11 @@ function MyAccount({
         <div>
           <span>Email</span>
           <strong>{email}</strong>
+        </div>
+
+        <div>
+          <span>Phone</span>
+          <strong>{profile.phone_number || "Not entered"}</strong>
         </div>
 
         <div>
