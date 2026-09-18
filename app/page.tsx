@@ -54,6 +54,7 @@ type Profile = {
   phone_number: string | null;
   role: "admin" | "caregiver";
   active: boolean;
+  organization_id: string;
 };
 
 
@@ -176,7 +177,7 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, phone_number, role, active")
+        .select("id, full_name, phone_number, role, active, organization_id")
         .eq("id", session.user.id)
         .single();
 
@@ -626,17 +627,30 @@ async function loadRecords() {
       progress_note,
       recorded_at,
       recorded_by,
-      patients (
-        patient_code,
-        first_name,
-        last_name
-      )
+      patients!vital_records_patient_organization_fkey (
+  patient_code,
+  first_name,
+  last_name
+)
     `)
     .order("recorded_at", { ascending: false });
 
   if (error) {
-    console.error("Error loading records:", error);
-    alert("Could not load patient records.");
+    console.error("Error loading records:", {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+
+    alert(
+      `Could not load patient records.\n\n` +
+      `Code: ${error.code || "none"}\n` +
+      `Message: ${error.message || "none"}\n` +
+      `Details: ${error.details || "none"}\n` +
+      `Hint: ${error.hint || "none"}`
+    );
+
     setRecordsLoading(false);
     return;
   }
@@ -884,6 +898,7 @@ async function handleSignOut() {
           <NewRecord
   patients={patients}
   onRecordSaved={loadRecords}
+  organizationId={profile.organization_id}
 />
         )}
 
@@ -894,6 +909,7 @@ async function handleSignOut() {
   records={records}
   onRecordsChanged={loadRecords}
   currentUserRole={profile.role}
+  organizationId={profile.organization_id}
 />
         )}
 
@@ -1359,6 +1375,7 @@ function StaffRoster({
         shift,
         user_id: session.user.id,
         assigned_by: session.user.id,
+        organization_id: profile.organization_id,
       });
 
     if (error) {
@@ -1524,6 +1541,7 @@ function StaffRoster({
           shift: editingCell.shift,
           user_id: selectedStaffId,
           assigned_by: session.user.id,
+          organization_id: profile.organization_id,
         });
 
       if (error) {
@@ -1715,9 +1733,11 @@ function StaffRoster({
 function NewRecord({
   patients,
   onRecordSaved,
+  organizationId,
 }: {
   patients: Patient[];
   onRecordSaved: () => Promise<void>;
+  organizationId: string;
 }) {
   const [saving, setSaving] = useState(false);
   const [recordType, setRecordType] = useState<"note" | "vitals">("note");
@@ -1793,6 +1813,7 @@ function NewRecord({
       .from("vital_records")
       .insert({
         patient_id: patientId,
+        organization_id: organizationId,
         systolic:
           recordType === "vitals" ? vitalValues.systolic : null,
         diastolic:
@@ -2034,6 +2055,7 @@ function Patients({
   records,
   onRecordsChanged,
   currentUserRole,
+  organizationId,
 }: {
   patients: Patient[];
   setPatients: React.Dispatch<
@@ -2042,6 +2064,7 @@ function Patients({
   records: VitalRecord[];
   onRecordsChanged: () => Promise<void>;
   currentUserRole: "admin" | "caregiver";
+  organizationId: string;
 }) {
   const [showForm, setShowForm] = useState(false);
 
@@ -2192,10 +2215,11 @@ const [viewPatientId, setViewPatientId] =
     const { data, error } = await supabase
       .from("patients")
       .insert({
-        ...patientData,
-        active: true,
-        created_by: userData.user.id,
-      })
+  ...patientData,
+  active: true,
+  created_by: userData.user.id,
+  organization_id: organizationId,
+})
       .select()
       .single();
 
@@ -2514,7 +2538,10 @@ async function handleRecordUpdate() {
           />
         </div>
 
-        <PatientTreatments patientId={selectedPatient.id} />
+        <PatientTreatments
+          patientId={selectedPatient.id}
+          organizationId={organizationId}
+        />
 
         <div
           className="formSectionTitle"
@@ -3016,8 +3043,10 @@ async function handleRecordUpdate() {
 
 function PatientTreatments({
   patientId,
+  organizationId,
 }: {
   patientId: string;
+  organizationId: string;
 }) {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [medication, setMedication] = useState("");
@@ -3083,6 +3112,7 @@ function PatientTreatments({
         patient_id: patientId,
         medication: cleanMedication,
         created_by: userData.user.id,
+        organization_id: organizationId,
       });
 
     if (error) {

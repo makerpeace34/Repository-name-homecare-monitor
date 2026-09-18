@@ -44,7 +44,7 @@ async function verifyAdministrator(request: NextRequest) {
 
   const { data: profile, error: profileError } = await adminClient
     .from("profiles")
-    .select("id, full_name, role, active")
+    .select("id, full_name, role, active, organization_id")
     .eq("id", user.id)
     .single();
 
@@ -52,7 +52,8 @@ async function verifyAdministrator(request: NextRequest) {
     profileError ||
     !profile ||
     profile.role !== "admin" ||
-    !profile.active
+    !profile.active ||
+    !profile.organization_id
   ) {
     return {
       error: "Administrator access is required.",
@@ -63,6 +64,7 @@ async function verifyAdministrator(request: NextRequest) {
   return {
     user,
     adminClient,
+    profile,
   };
 }
 
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { adminClient } = verification;
+  const { adminClient, profile: currentAdminProfile } = verification;
 
   const { data: authData, error: authError } =
     await adminClient.auth.admin.listUsers({
@@ -102,8 +104,9 @@ export async function GET(request: NextRequest) {
   const { data: profiles, error: profilesError } = await adminClient
     .from("profiles")
     .select(
-      "id, full_name, phone_number, role, active, created_at"
-    );
+      "id, full_name, phone_number, role, active, created_at, organization_id"
+    )
+    .eq("organization_id", currentAdminProfile.organization_id);
 
   if (profilesError) {
     return NextResponse.json(
@@ -116,28 +119,30 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const users = authData.users.map((authUser) => {
-    const profile = profiles?.find(
-      (item) => item.id === authUser.id
-    );
+  const organizationProfileIds = new Set(
+    (profiles || []).map((item) => item.id)
+  );
 
-    return {
-      id: authUser.id,
+  const users = authData.users
+    .filter((authUser) =>
+      organizationProfileIds.has(authUser.id)
+    )
+    .map((authUser) => {
+      const profile = profiles?.find(
+        (item) => item.id === authUser.id
+      );
 
-      email: authUser.email || "",
-
-      fullName: profile?.full_name || "",
-
-      phoneNumber: profile?.phone_number || "",
-
-      role: profile?.role || "caregiver",
-
-      active: profile?.active ?? true,
-
-      createdAt:
-        profile?.created_at || authUser.created_at,
-    };
-  });
+      return {
+        id: authUser.id,
+        email: authUser.email || "",
+        fullName: profile?.full_name || "",
+        phoneNumber: profile?.phone_number || "",
+        role: profile?.role || "caregiver",
+        active: profile?.active ?? true,
+        createdAt:
+          profile?.created_at || authUser.created_at,
+      };
+    });
 
   return NextResponse.json({
     users,
@@ -158,7 +163,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { adminClient } = verification;
+  const { adminClient, profile: currentAdminProfile } = verification;
 
   try {
     const body = await request.json();
@@ -267,6 +272,7 @@ export async function POST(request: NextRequest) {
         phone_number: phoneNumber,
         role,
         active: true,
+        organization_id: currentAdminProfile.organization_id,
       });
 
     if (profileError) {
@@ -320,7 +326,11 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const { adminClient, user: currentAdmin } = verification;
+  const {
+    adminClient,
+    user: currentAdmin,
+    profile: currentAdminProfile,
+  } = verification;
 
   try {
     const body = await request.json();
@@ -342,6 +352,42 @@ export async function PATCH(request: NextRequest) {
         },
         {
           status: 400,
+        }
+      );
+    }
+
+    const {
+      data: targetProfile,
+      error: targetProfileError,
+    } = await adminClient
+      .from("profiles")
+      .select("id, organization_id")
+      .eq("id", userId)
+      .eq(
+        "organization_id",
+        currentAdminProfile.organization_id
+      )
+      .maybeSingle();
+
+    if (targetProfileError) {
+      return NextResponse.json(
+        {
+          error: targetProfileError.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (!targetProfile) {
+      return NextResponse.json(
+        {
+          error:
+            "User not found in your organization.",
+        },
+        {
+          status: 404,
         }
       );
     }
@@ -380,7 +426,11 @@ export async function PATCH(request: NextRequest) {
         .update({
           phone_number: phoneNumber,
         })
-        .eq("id", userId);
+        .eq("id", userId)
+        .eq(
+          "organization_id",
+          currentAdminProfile.organization_id
+        );
 
       if (phoneError) {
         return NextResponse.json(
@@ -469,7 +519,11 @@ export async function PATCH(request: NextRequest) {
       .update({
         active,
       })
-      .eq("id", userId);
+      .eq("id", userId)
+      .eq(
+        "organization_id",
+        currentAdminProfile.organization_id
+      );
 
     if (updateError) {
       return NextResponse.json(
