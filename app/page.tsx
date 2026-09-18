@@ -1809,11 +1809,48 @@ function NewRecord({
       return;
     }
 
+    // Verify the organization directly from the signed-in user's profile.
+    const { data: currentProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("organization_id, active")
+      .eq("id", userData.user.id)
+      .single();
+
+    if (
+      profileError ||
+      !currentProfile ||
+      !currentProfile.active ||
+      !currentProfile.organization_id
+    ) {
+      console.error("Could not verify organization:", profileError);
+      alert("Your organization could not be verified. Please sign out and sign in again.");
+      setSaving(false);
+      return;
+    }
+
+    // Confirm the selected patient is in the same organization.
+    const { data: selectedPatient, error: patientError } = await supabase
+      .from("patients")
+      .select("id, organization_id")
+      .eq("id", patientId)
+      .single();
+
+    if (
+      patientError ||
+      !selectedPatient ||
+      selectedPatient.organization_id !== currentProfile.organization_id
+    ) {
+      console.error("Patient organization verification failed:", patientError);
+      alert("This patient does not belong to your organization.");
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase
       .from("vital_records")
       .insert({
         patient_id: patientId,
-        organization_id: organizationId,
+        organization_id: currentProfile.organization_id,
         systolic:
           recordType === "vitals" ? vitalValues.systolic : null,
         diastolic:
