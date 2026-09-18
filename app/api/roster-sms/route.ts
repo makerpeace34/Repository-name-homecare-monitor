@@ -73,14 +73,16 @@ export async function POST(
       );
     }
 
-    // 2. Only an active administrator can send
-    // roster assignment SMS messages.
+    // 2. Only an active administrator
+    // with an organization can send roster SMS.
     const {
       data: currentProfile,
       error: currentProfileError,
     } = await adminClient
       .from("profiles")
-      .select("id, role, active")
+      .select(
+        "id, role, active, organization_id"
+      )
       .eq("id", currentUser.id)
       .single();
 
@@ -88,7 +90,8 @@ export async function POST(
       currentProfileError ||
       !currentProfile ||
       currentProfile.role !== "admin" ||
-      !currentProfile.active
+      !currentProfile.active ||
+      !currentProfile.organization_id
     ) {
       return NextResponse.json(
         {
@@ -176,18 +179,28 @@ export async function POST(
       );
     }
 
-    // 4. Get the staff member directly from
-    // Supabase. The browser never supplies the
-    // destination phone number.
+    // 4. Get the staff member.
+    //
+    // IMPORTANT:
+    // This endpoint uses the Supabase service role,
+    // so RLS is bypassed here.
+    //
+    // We therefore explicitly require the staff
+    // member to belong to the SAME organization
+    // as the logged-in administrator.
     const {
       data: staffProfile,
       error: staffError,
     } = await adminClient
       .from("profiles")
       .select(
-        "id, full_name, phone_number, active"
+        "id, full_name, phone_number, active, organization_id"
       )
       .eq("id", userId)
+      .eq(
+        "organization_id",
+        currentProfile.organization_id
+      )
       .single();
 
     if (
@@ -196,10 +209,23 @@ export async function POST(
     ) {
       return NextResponse.json(
         {
-          error: "Staff member not found.",
+          error:
+            "Staff member not found in your organization.",
         },
         {
           status: 404,
+        }
+      );
+    }
+
+    if (!staffProfile.active) {
+      return NextResponse.json(
+        {
+          error:
+            "This staff member is inactive.",
+        },
+        {
+          status: 400,
         }
       );
     }
@@ -262,8 +288,8 @@ export async function POST(
         `${displayDate} has been removed or changed.`;
     }
 
-    // 6. In Sandbox, redirect messages to the
-    // simulator number instead of a real phone.
+    // 6. In Sandbox, redirect messages
+    // to the simulator number.
     const sandboxTestNumber =
       process.env.AFRICASTALKING_TEST_TO;
 
@@ -298,14 +324,12 @@ export async function POST(
         : "https://api.africastalking.com/version1/messaging",
       {
         method: "POST",
-
         headers: {
           apiKey: africasTalkingApiKey,
           Accept: "application/json",
           "Content-Type":
             "application/x-www-form-urlencoded",
         },
-
         body: smsBody.toString(),
       }
     );
