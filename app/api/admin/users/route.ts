@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getAdminClient() {
   return createClient(supabaseUrl, supabaseServiceKey, {
@@ -18,9 +19,13 @@ function isValidRwandaPhone(phoneNumber: string) {
 }
 
 async function verifyAdministrator(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
+  const authorization =
+    request.headers.get("authorization");
 
-  if (!authorization || !authorization.startsWith("Bearer ")) {
+  if (
+    !authorization ||
+    !authorization.startsWith("Bearer ")
+  ) {
     return {
       error: "Not authenticated.",
       status: 401,
@@ -42,11 +47,14 @@ async function verifyAdministrator(request: NextRequest) {
     };
   }
 
-  const { data: profile, error: profileError } = await adminClient
-    .from("profiles")
-    .select("id, full_name, role, active, organization_id")
-    .eq("id", user.id)
-    .single();
+  const { data: profile, error: profileError } =
+    await adminClient
+      .from("profiles")
+      .select(
+        "id, full_name, role, active, organization_id"
+      )
+      .eq("id", user.id)
+      .single();
 
   if (
     profileError ||
@@ -69,7 +77,8 @@ async function verifyAdministrator(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const verification = await verifyAdministrator(request);
+  const verification =
+    await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -82,7 +91,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { adminClient, profile: currentAdminProfile } = verification;
+  const {
+    adminClient,
+    profile: currentAdminProfile,
+  } = verification;
 
   const { data: authData, error: authError } =
     await adminClient.auth.admin.listUsers({
@@ -101,12 +113,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data: profiles, error: profilesError } = await adminClient
-    .from("profiles")
-    .select(
-      "id, full_name, phone_number, role, active, created_at, organization_id"
-    )
-    .eq("organization_id", currentAdminProfile.organization_id);
+  const { data: profiles, error: profilesError } =
+    await adminClient
+      .from("profiles")
+      .select(
+        "id, full_name, phone_number, role, active, created_at, organization_id"
+      )
+      .eq(
+        "organization_id",
+        currentAdminProfile.organization_id
+      );
 
   if (profilesError) {
     return NextResponse.json(
@@ -140,7 +156,8 @@ export async function GET(request: NextRequest) {
         role: profile?.role || "caregiver",
         active: profile?.active ?? true,
         createdAt:
-          profile?.created_at || authUser.created_at,
+          profile?.created_at ||
+          authUser.created_at,
       };
     });
 
@@ -150,7 +167,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const verification = await verifyAdministrator(request);
+  const verification =
+    await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -163,12 +181,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { adminClient, profile: currentAdminProfile } = verification;
+  const {
+    adminClient,
+    user: currentAdmin,
+    profile: currentAdminProfile,
+  } = verification;
 
   try {
     const body = await request.json();
 
-    const fullName = String(body.fullName || "").trim();
+    const fullName = String(
+      body.fullName || ""
+    ).trim();
 
     const email = String(body.email || "")
       .trim()
@@ -178,10 +202,14 @@ export async function POST(request: NextRequest) {
       body.phoneNumber || ""
     ).trim();
 
-    const password = String(body.password || "");
+    const password = String(
+      body.password || ""
+    );
 
     const role =
-      body.role === "admin" ? "admin" : "caregiver";
+      body.role === "admin"
+        ? "admin"
+        : "caregiver";
 
     if (!fullName) {
       return NextResponse.json(
@@ -240,18 +268,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: newUserData, error: createError } =
+    const {
+      data: newUserData,
+      error: createError,
+    } =
       await adminClient.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-
         user_metadata: {
           full_name: fullName,
         },
       });
 
-    if (createError || !newUserData.user) {
+    if (
+      createError ||
+      !newUserData.user
+    ) {
       return NextResponse.json(
         {
           error:
@@ -264,16 +297,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: profileError } = await adminClient
-      .from("profiles")
-      .upsert({
-        id: newUserData.user.id,
-        full_name: fullName,
-        phone_number: phoneNumber,
-        role,
-        active: true,
-        organization_id: currentAdminProfile.organization_id,
-      });
+    /*
+     * The auth trigger does not create a profile here
+     * because organization_id is not supplied through
+     * user metadata.
+     *
+     * Create the profile using an RPC so the audit
+     * trigger knows which administrator created it.
+     */
+    const { error: profileError } =
+      await adminClient.rpc(
+        "admin_create_profile",
+        {
+          target_user_id:
+            newUserData.user.id,
+          target_organization_id:
+            currentAdminProfile.organization_id,
+          actor_user_id:
+            currentAdmin.id,
+          target_full_name:
+            fullName,
+          target_phone_number:
+            phoneNumber,
+          target_role:
+            role,
+        }
+      );
 
     if (profileError) {
       await adminClient.auth.admin.deleteUser(
@@ -313,7 +362,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const verification = await verifyAdministrator(request);
+  const verification =
+    await verifyAdministrator(request);
 
   if ("error" in verification) {
     return NextResponse.json(
@@ -335,9 +385,15 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const userId = String(body.userId || "").trim();
+    const userId = String(
+      body.userId || ""
+    ).trim();
+
     const active = body.active;
-    const newPassword = String(body.newPassword || "");
+
+    const newPassword = String(
+      body.newPassword || ""
+    );
 
     const hasPhoneNumber =
       Object.prototype.hasOwnProperty.call(
@@ -356,6 +412,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Verify target belongs to this organization.
     const {
       data: targetProfile,
       error: targetProfileError,
@@ -392,7 +449,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update phone number
+    // Update phone number.
     if (hasPhoneNumber) {
       const phoneNumber = String(
         body.phoneNumber || ""
@@ -401,7 +458,8 @@ export async function PATCH(request: NextRequest) {
       if (!phoneNumber) {
         return NextResponse.json(
           {
-            error: "Phone number is required.",
+            error:
+              "Phone number is required.",
           },
           {
             status: 400,
@@ -409,7 +467,9 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      if (!isValidRwandaPhone(phoneNumber)) {
+      if (
+        !isValidRwandaPhone(phoneNumber)
+      ) {
         return NextResponse.json(
           {
             error:
@@ -421,15 +481,19 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const { error: phoneError } = await adminClient
-        .from("profiles")
-        .update({
-          phone_number: phoneNumber,
-        })
-        .eq("id", userId)
-        .eq(
-          "organization_id",
-          currentAdminProfile.organization_id
+      const { error: phoneError } =
+        await adminClient.rpc(
+          "admin_update_profile",
+          {
+            target_user_id: userId,
+            target_organization_id:
+              currentAdminProfile.organization_id,
+            actor_user_id:
+              currentAdmin.id,
+            new_phone_number:
+              phoneNumber,
+            new_active: null,
+          }
         );
 
       if (phoneError) {
@@ -449,7 +513,7 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    // Reset password
+    // Reset password.
     if (newPassword) {
       if (newPassword.length < 8) {
         return NextResponse.json(
@@ -464,12 +528,13 @@ export async function PATCH(request: NextRequest) {
       }
 
       const { error: passwordError } =
-        await adminClient.auth.admin.updateUserById(
-          userId,
-          {
-            password: newPassword,
-          }
-        );
+        await adminClient.auth.admin
+          .updateUserById(
+            userId,
+            {
+              password: newPassword,
+            }
+          );
 
       if (passwordError) {
         return NextResponse.json(
@@ -487,7 +552,7 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    // Activate / deactivate user
+    // Activate / deactivate user.
     if (typeof active !== "boolean") {
       return NextResponse.json(
         {
@@ -514,15 +579,18 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const { error: updateError } = await adminClient
-      .from("profiles")
-      .update({
-        active,
-      })
-      .eq("id", userId)
-      .eq(
-        "organization_id",
-        currentAdminProfile.organization_id
+    const { error: updateError } =
+      await adminClient.rpc(
+        "admin_update_profile",
+        {
+          target_user_id: userId,
+          target_organization_id:
+            currentAdminProfile.organization_id,
+          actor_user_id:
+            currentAdmin.id,
+          new_phone_number: null,
+          new_active: active,
+        }
       );
 
     if (updateError) {
