@@ -48,7 +48,7 @@ button {
 }
 
 .sidebar {
-  width: 245px;
+  width: 230px;
   background: linear-gradient(180deg, #123f45 0%, #0d3439 100%);
   color: white;
   padding: 28px 18px 20px;
@@ -169,8 +169,10 @@ nav {
 }
 
 .main {
-  margin-left: 245px;
-  width: calc(100% - 245px);
+  margin-left: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
   padding: 0 32px 40px;
 }
 
@@ -917,4 +919,16 @@ textarea {
   border-radius: 9px;
   margin-top: 15px;
   font-size: 12px;
+}
+/* Shared workspace geometry: sidebar and every page share one layout. */
+@media (min-width: 801px) {
+  .app { display: flex; width: 100%; min-width: 0; }
+  .app > .sidebar { width: 230px; flex: 0 0 230px; position: sticky; top: 0; }
+  .app > .main { flex: 1 1 auto; width: 0; min-width: 0; margin-left: 0; }
+}
+.app > .main > * { min-width: 0; }
+.app .panel, .app .formPanel, .app .accountPanel { min-width: 0; max-width: 100%; }
+.app .tableWrapper { max-width: 100%; overflow-x: auto; }
+@media (max-width: 800px) {
+  .app > .main { width: 100%; margin-left: 0; min-width: 0; }
 }

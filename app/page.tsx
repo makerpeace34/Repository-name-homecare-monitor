@@ -597,6 +597,7 @@ function HomeCareApp({
 }) {
   const [activePage, setActivePage] = useState("Dashboard");
   const [signingOut, setSigningOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [patients, setPatients] = useState<Patient[]>([]);
 const [patientsLoading, setPatientsLoading] = useState(true);
@@ -873,6 +874,13 @@ async function handleSignOut() {
   }
 }
 
+  useEffect(() => {
+    // Page changes must not retain horizontal scrolling from wide record tables.
+    window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    document.querySelector(".app > .main")?.scrollTo({ left: 0, top: 0 });
+    document.querySelectorAll(".app .tableWrapper").forEach((element) => { element.scrollLeft = 0; });
+  }, [activePage]);
+
   const menuItems =
     profile.role === "admin"
       ? [
@@ -892,8 +900,130 @@ async function handleSignOut() {
         ];
 
   return (
-    <div className="app" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
-      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "100dvh", maxHeight: "100dvh", width: 230, minWidth: 230, flex: "0 0 230px", overflowY: "auto", overflowX: "hidden", boxSizing: "border-box" }}> 
+    <>
+      <style>{`
+        /* Shared desktop and mobile layout: prevent non-dashboard pages from
+           widening the document or sliding beneath the sidebar. */
+        html, body { max-width: 100%; }
+        .app { width: 100%; max-width: 100%; min-width: 0; overflow-x: clip; }
+        .app > .main > .panel, .app > .main > .accountPanel { margin-inline: 0 !important; }
+        .app > .main {
+          min-width: 0 !important;
+          max-width: none !important;
+          width: 0 !important;
+          flex: 1 1 auto !important;
+          overflow-x: clip !important;
+          padding-left: 32px !important;
+          padding-right: 32px !important;
+        }
+        .app > .main > .topbar { width: 100% !important; min-width: 0 !important; }
+        .app > .main > :not(.topbar) {
+          box-sizing: border-box;
+          min-width: 0;
+          max-width: 100%;
+        }
+        .app > .main > .panel,
+        .app > .main > .formPanel {
+          width: 100% !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+          transform: none !important;
+        }
+        .app .panelHeader, .app .filters, .app .accountInfo,
+        .app .recordForm, .app .patientFilters { min-width: 0; max-width: 100%; }
+        .app .filters, .app .patientFilters {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+        }
+        .app .filters > *, .app .patientFilters > *,
+        .app .accountInfo > *, .app .recordForm > * { min-width: 0; }
+        .app .tableWrapper { width: 100%; max-width: 100%; overflow-x: auto; }
+        .app .accountInfo { overflow-wrap: anywhere; }
+        @media (min-width: 801px) and (max-width: 1150px) {
+          .app > .main { padding-left: 20px !important; padding-right: 20px !important; }
+        }
+        @media (max-width: 800px) {
+          .app > .main { width: 100% !important; max-width: 100% !important; padding-left: 14px !important; padding-right: 14px !important; }
+        }
+        /* Shared responsive layout for every workspace, including New Record. */
+        .app, .app * { box-sizing: border-box; }
+        .app .main { min-width: 0; }
+        .app .compactDashboardContent { align-items: start !important; }
+        .app .compactDashboardContent > .panel { min-height: 0 !important; }
+        .app .compactDashboardContent > .panel:last-child { align-self: start !important; height: auto !important; min-height: 0 !important; }
+        .app .compactDashboardContent > .panel:last-child .quickActions { flex: 0 0 auto !important; }
+        .mobileMenuButton, .mobileMenuBackdrop { display: none; }
+        @media (max-width: 800px) {
+          html, body { max-width: 100%; overflow-x: hidden; }
+          .app { display: block !important; width: 100% !important; min-width: 0 !important; }
+          .app > .main { width: 100% !important; min-width: 0 !important; margin: 0 !important; padding: 16px 14px 32px !important; }
+          .app > .sidebar {
+            position: fixed !important; inset: 0 auto 0 0 !important;
+            top: 0 !important; left: 0 !important;
+            width: min(290px, 84vw) !important; min-width: 0 !important;
+            max-width: min(290px, 84vw) !important; flex-basis: auto !important;
+            height: 100dvh !important; min-height: 0 !important; max-height: 100dvh !important;
+            border-radius: 0 18px 18px 0 !important; overflow-y: auto !important;
+            transform: translateX(-105%); transition: transform .2s ease;
+            z-index: 1100 !important; box-shadow: 8px 0 28px rgba(0,0,0,.16);
+          }
+          .app > .sidebar.mobileMenuOpen { transform: translateX(0) !important; }
+          .mobileMenuBackdrop { display: block; position: fixed; inset: 0; border: 0; padding: 0; background: rgba(7,29,34,.54); z-index: 1090; }
+          .mobileMenuButton {
+            display: inline-flex !important; align-items: center; justify-content: center;
+            width: 44px; height: 44px; flex-shrink: 0;
+            border: 1px solid #d7e3e5; border-radius: 12px;
+            background: #fff; color: #0e5557; cursor: pointer;
+          }
+          .app .topbar { display: flex !important; align-items: center !important; gap: 12px !important; padding: 0 0 12px !important; margin: 0 0 14px !important; min-width: 0 !important; }
+          .app .topbar > div:first-child { min-width: 0; flex: 1; }
+          .app .topbar h1 { font-size: clamp(23px, 6vw, 30px) !important; line-height: 1.2 !important; margin: 0 !important; overflow-wrap: anywhere; }
+          .app .topbar .eyebrow { font-size: 10px !important; margin: 0 0 4px !important; }
+          .app .topbar .headerUser { display: none !important; }
+          .app .panel, .app .formPanel { width: 100% !important; max-width: 100% !important; min-width: 0 !important; padding: 16px !important; }
+          .app .panelHeader { min-width: 0 !important; flex-wrap: wrap; gap: 8px; }
+          .app .recordForm, .app .recordForm .field, .app .recordForm .field.full,
+          .app .recordForm .vitalGrid, .app .recordForm .vitalCard { min-width: 0 !important; max-width: 100% !important; width: 100% !important; }
+          .app .recordForm { display: grid !important; grid-template-columns: minmax(0,1fr) !important; gap: 14px !important; }
+          .app .recordForm .field.full, .app .recordForm .formActions, .app .recordForm .formSectionTitle { grid-column: 1 / -1 !important; }
+          .app .recordForm .vitalGrid { display: grid !important; grid-template-columns: minmax(0,1fr) !important; gap: 12px !important; }
+          .app .recordForm .field > div[style*="grid-template-columns"],
+          .app .recordForm .field > div[style*="gridTemplateColumns"] { min-width: 0 !important; }
+          .app .recordForm button { min-width: 0 !important; white-space: normal !important; overflow-wrap: break-word !important; }
+          .app input, .app select, .app textarea { max-width: 100% !important; min-width: 0 !important; font-size: 16px !important; }
+          .app .recordForm input, .app .recordForm select, .app .recordForm textarea { width: 100% !important; }
+          .app .recordForm .dualInput { min-width: 0 !important; }
+          .app .recordForm .dualInput input { width: 100% !important; min-width: 0 !important; }
+          .app .recordForm .formActions { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; }
+          .app .recordForm .formActions button { flex: 1 1 120px; }
+          .app .welcome { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+          .app .welcome .primaryButton { width: 100%; }
+          .app .statsGrid { display: grid !important; grid-template-columns: repeat(2, minmax(0,1fr)) !important; gap: 10px !important; }
+          .app .statsGrid .statCard { min-width: 0 !important; }
+          .app .statsGrid .statCard > div { gap: 7px !important; }
+          .app .statsGrid .statCard p { overflow-wrap: anywhere; }
+          .app .contentGrid { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+          .app .contentGrid > .panel { width: 100% !important; min-width: 0 !important; height: auto !important; }
+          .app .contentGrid > .panel:last-child { order: -1; }
+          .app .tableWrapper { max-width: 100% !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+          .app .tableWrapper table { width: max-content; min-width: 100%; }
+          .app .quickActions { display: grid !important; gap: 8px !important; }
+          .app .quickActions button { width: 100% !important; min-width: 0 !important; }
+          .app .vitalGrid { grid-template-columns: minmax(0,1fr) !important; }
+        }
+        @media (max-width: 380px) {
+          .app > .main { padding: 12px 10px 24px !important; }
+          .app .statsGrid { gap: 8px !important; }
+          .app .statsGrid .statCard { padding: 10px 8px !important; }
+          .app .statsGrid .statCard > div { flex-wrap: wrap; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .app > .sidebar { transition: none !important; }
+        }
+      `}</style>
+      {mobileMenuOpen && <button type="button" className="mobileMenuBackdrop" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)} />}
+      <div className="app" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
+      <aside className={mobileMenuOpen ? "sidebar mobileMenuOpen" : "sidebar"} aria-label="Main navigation" style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "100dvh", maxHeight: "100dvh", width: 230, minWidth: 230, flex: "0 0 230px", overflowY: "auto", overflowX: "hidden", boxSizing: "border-box" }}> 
         <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", minHeight: "auto" }}>
           <div className="logo" style={{ flexShrink: 0 }}>
             <div className="logoIcon">+</div>
@@ -913,7 +1043,7 @@ async function handleSignOut() {
                 className={
                   activePage === item ? "navButton active" : "navButton"
                 }
-                onClick={() => setActivePage(item)}
+                onClick={() => { setActivePage(item); setMobileMenuOpen(false); }}
               >
                 <span
                   className="navIcon"
@@ -927,7 +1057,7 @@ async function handleSignOut() {
           </nav>
         </div>
 
-        <div className="sidebarBottom" style={{ flexShrink: 0, marginTop: "auto", paddingTop: 6, paddingBottom: 8, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+        <div className="sidebarBottom" style={{ flexShrink: 0, marginTop: 10, paddingTop: 8, paddingBottom: 8, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
           <div
             className="organizationBadge"
             style={{
@@ -998,8 +1128,11 @@ async function handleSignOut() {
         </div>
       </aside>
 
-      <main className="main" style={{ flex: "1 1 0%", minWidth: 0, width: "auto", marginLeft: 0, boxSizing: "border-box" }}>
+      <main className="main" style={{ flex: "1 1 auto", minWidth: 0, width: "0", marginLeft: 0, boxSizing: "border-box" }}>
         <header className="topbar">
+          <button type="button" className="mobileMenuButton" aria-label="Open navigation menu" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
           <div>
             <p className="eyebrow">HEALTHY HOMECARE</p>
             <h1>{activePage}</h1>
@@ -1067,7 +1200,8 @@ async function handleSignOut() {
           />
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -1116,13 +1250,13 @@ function Dashboard({
       record.note !== "—"
   );
 
-  // Dashboard recent records intentionally show progress notes only.
+  // Show up to six recent progress notes on the dashboard; the Records page remains the full history.
   const recentRecords = records
     .filter(
       (record) =>
         record.note && record.note !== "—"
     )
-    .slice(0, 3);
+    .slice(0, 6);
 
   function shouldShowPatientName(
     record: VitalRecord,
@@ -1140,25 +1274,23 @@ function Dashboard({
       <style>{`
         /* Keep the sidebar and main area in separate flex columns. */
         .app { display: flex !important; }
-        .app > .sidebar { position: sticky !important; top: 0 !important; align-self: flex-start !important; left: auto !important; margin: 0 !important; flex-shrink: 0 !important; border-radius: 0 16px 16px 0 !important; }
-        .app > .main { position: relative !important; margin-left: 0 !important; min-width: 0 !important; flex: 1 1 0% !important; }
-        @media (max-width: 800px) {
-          .app { flex-direction: column !important; }
-          .app > .sidebar { position: relative !important; top: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; border-radius: 0 0 16px 16px !important; }
-          .app > .main { width: 100% !important; }
+        @media (min-width: 801px) {
+          .app > .sidebar { position: sticky !important; top: 0 !important; align-self: flex-start !important; left: auto !important; margin: 0 !important; flex-shrink: 0 !important; border-radius: 0 16px 16px 0 !important; }
         }
-        /* Fit all navigation items in the sidebar without an intrusive scrollbar. */
+        .app > .main { position: relative !important; margin-left: 0 !important; min-width: 0 !important; flex: 1 1 auto !important; }
+        /* Keep navigation and organization together; no empty flex spacer. */
         /* Compact the header and all six links so the account panel does not cover navigation. */
-        .app > .sidebar .logo { padding: 8px 12px 6px !important; margin-bottom: 2px !important; gap: 10px !important; }
+        .app > .sidebar .logo { padding: 6px 12px 4px !important; margin-bottom: 0 !important; gap: 10px !important; }
         .app > .sidebar .logo h2 { font-size: 20px !important; }
         .app > .sidebar .logo span { font-size: 11px !important; }
         .app > .sidebar nav { display: flex !important; flex-direction: column !important; flex: 0 0 auto !important; min-height: max-content !important; overflow: visible !important; gap: 1px !important; padding: 0 10px 2px !important; }
-        .app > .sidebar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
-        .app > .sidebar .navButton { box-sizing: border-box !important; flex: 0 0 39px !important; height: 39px !important; min-height: 39px !important; max-height: 39px !important; padding: 6px 10px !important; margin: 0 !important; gap: 9px !important; font-size: 14px !important; }
-        .app > .sidebar .sidebarBottom { flex-shrink: 0 !important; padding: 6px 12px 8px !important; }
+        .app > .sidebar { scrollbar-width: none; -ms-overflow-style: none; }
+        .app > .sidebar::-webkit-scrollbar { display: none; width: 0; }
+        .app > .sidebar .navButton { box-sizing: border-box !important; flex: 0 0 35px !important; height: 35px !important; min-height: 35px !important; max-height: 35px !important; padding: 6px 10px !important; margin: 0 !important; gap: 9px !important; font-size: 14px !important; }
+        .app > .sidebar .sidebarBottom { flex-shrink: 0 !important; margin-top: 6px !important; padding: 6px 12px 6px !important; }
         .app > .sidebar .organizationBadge { padding: 4px 0 !important; margin-bottom: 4px !important; }
         .app > .sidebar .userMini { margin-top: 4px !important; }
-        .app > .sidebar .logoutButton { margin-top: 8px !important; }
+        .app > .sidebar .logoutButton { margin-top: 5px !important; }
         /* Scroll the entire sidebar on short screens; never clip menu links behind the account panel. */
         
         @media (max-width: 800px) {
@@ -1166,58 +1298,186 @@ function Dashboard({
         }
         /* Dashboard-only compact layout: preserve existing colors and interactions. */
         /* Keep a visible gutter between the fixed sidebar and dashboard content. */
-        .main:has(.compactDashboardWelcome) { padding-left: 32px !important; box-sizing: border-box; }
+        .main:has(.compactDashboardWelcome) { box-sizing: border-box; }
         @media (max-width: 800px) {
-          .main:has(.compactDashboardWelcome) { padding-left: 16px !important; padding-right: 16px !important; }
+          .main:has(.compactDashboardWelcome) { box-sizing: border-box; }
         }
         .main:has(.compactDashboardWelcome) .topbar {
-          padding-top: 12px !important;
-          padding-bottom: 12px !important;
-          margin-bottom: 16px !important;
+          padding-top: 4px !important;
+          padding-bottom: 5px !important;
+          margin-bottom: 8px !important;
           min-height: 0 !important;
         }
         .compactDashboardWelcome {
-          padding: 16px 22px !important;
+          padding: 10px 18px !important;
           min-height: 0 !important;
-          margin-bottom: 14px !important;
-          gap: 12px;
+          margin-bottom: 9px !important;
+          gap: 10px;
         }
-        .compactDashboardWelcome h2 { font-size: clamp(20px, 1.6vw, 26px) !important; margin: 0 0 6px !important; }
-        .compactDashboardWelcome p { margin: 0 !important; line-height: 1.4; }
+        .compactDashboardWelcome h2 { font-size: clamp(20px, 1.6vw, 26px) !important; margin: 0 0 3px !important; }
+        .compactDashboardWelcome p { margin: 0 !important; line-height: 1.25; }
         /* Shared dashboard dimensions for administrator and caregiver. */
-        .compactDashboardStats { gap: 12px !important; margin-bottom: 14px !important; align-items: stretch !important; }
+        .compactDashboardStats { gap: 10px !important; margin-bottom: 9px !important; align-items: stretch !important; }
         .compactDashboardStats .statCard > div > div { min-width: 0; }
         .compactDashboardStats .statCard > div > div > span { overflow-wrap: normal !important; word-break: normal !important; }
-        @media (max-width: 800px) {
-          .app > .sidebar { width: 100% !important; min-width: 0 !important; flex-basis: auto !important; }
-        }
         .compactDashboardStats .statCard {
           min-height: 0 !important;
           height: 100% !important;
-          padding: 12px 14px !important;
+          padding: 7px 12px !important;
         }
         .compactDashboardStats .statCard > div { gap: 12px !important; }
         .compactDashboardStats .statCard > div > span:first-child {
-          width: 42px !important;
-          height: 42px !important;
+          width: 38px !important;
+          height: 38px !important;
           border-radius: 14px !important;
         }
-        .compactDashboardStats .statCard h2 { margin: 3px 0 !important; font-size: 26px !important; }
-        .compactDashboardStats .statCard p { margin: 0 !important; font-size: 15px !important; line-height: 1.35; }
+        .compactDashboardStats .statCard h2 { margin: 3px 0 !important; font-size: 24px !important; }
+        .compactDashboardStats .statCard p { margin: 0 !important; font-size: 14px !important; line-height: 1.25; }
         .compactDashboardStats .statCard > div > div > span {
-          font-size: 14px !important;
-          line-height: 1.45 !important;
+          font-size: 13px !important;
+          line-height: 1.3 !important;
           color: #526577 !important;
         }
-        .compactDashboardContent { gap: 14px !important; align-items: stretch !important; }
-        .compactDashboardContent > .panel { height: auto !important; min-height: 240px !important; display: flex; flex-direction: column; }
+        .compactDashboardContent { gap: 10px !important; align-items: start !important; }
+        .dashboardSideColumn { display: flex; flex-direction: column; gap: 10px; min-width: 0; align-self: start; }
+        .dashboardSideColumn > .panel { height: auto !important; min-height: 0 !important; }
+        /* Keep the records panel aligned with the complete right-hand column on desktop. */
+        @media (min-width: 801px) {
+          .compactDashboardContent { align-items: stretch !important; }
+          .compactDashboardContent > .largePanel { height: 100% !important; }
+          .compactDashboardContent > .dashboardSideColumn { align-self: stretch; height: 100%; }
+        }
+
+        /* Match the left records card to the full right stack on desktop.
+           Grid stretching uses the actual content height, not a fixed pixel height. */
+        @media (min-width: 801px) {
+          .compactDashboardContent {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) minmax(300px, 29%) !important;
+            align-items: stretch !important;
+          }
+          .compactDashboardContent > .largePanel {
+            height: auto !important;
+            min-height: 100% !important;
+            align-self: stretch !important;
+          }
+          .compactDashboardContent > .dashboardSideColumn {
+            height: auto !important;
+            align-self: stretch !important;
+          }
+          .compactDashboardContent .recordsCardFooter {
+            margin-top: auto;
+            padding-top: 16px;
+            display: flex;
+            justify-content: flex-end;
+          }
+        }
+        @media (max-width: 800px) {
+          .compactDashboardContent .recordsCardFooter {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+          }
+        }
+        /* Photo-based care panel: responsive, no fixed-height cropping. */
+        .homecarePhotoPanel { display: flex; flex-direction: column; gap: 8px; }
+        .homecarePhotoHeading h3 { margin: 0 0 3px; font-size: 19px; line-height: 1.2; color: #116f70; }
+        .homecarePhotoHeading p { margin: 0; font-size: 12px; color: #657d80; }
+        .homecareNursePhoto { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: center; border-radius: 13px; }
+        .homecarePhotoCaption { margin: 0; font-size: 10px; color: #657d80; }
+        @media (max-width: 800px) {
+          .homecarePhotoHeading h3 { font-size: 18px; }
+          .homecareNursePhoto { aspect-ratio: 16 / 10; }
+        }
+        .medicalOverviewPanel { overflow: hidden; }
+        .medicalOverviewBody { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+        .medicalEquipmentGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+        .medicalEquipmentTile { min-width: 0; min-height: 62px; padding: 6px 3px; border: 1px solid #e0ebed; background: #f3f8f8; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; text-align: center; color: #27494f; font-size: 10px; line-height: 1.15; }
+        .medicalEquipmentIcon { font-size: 24px; line-height: 1.1; }
+        .patientIllustration { width: 100%; max-width: 180px; margin: 0 auto; aspect-ratio: 1; }
+        .medicalOverviewDisclaimer { font-size: 10px; color: #647c80; margin: 7px 0 0; }
+        @media (max-width: 1100px) and (min-width: 801px) {
+          .medicalOverviewBody { grid-template-columns: 1fr; }
+          .patientIllustration { max-width: 125px; }
+        }
+        @media (max-width: 800px) {
+          .medicalOverviewBody { grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); }
+          .medicalEquipmentTile { min-height: 57px; }
+        }
+        @media (max-width: 390px) {
+          .medicalOverviewBody { grid-template-columns: 1fr; }
+          .patientIllustration { max-width: 150px; }
+        }
+        .careSummaryRows { display: grid; gap: 10px; }
+        .careSummaryRow { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; color: #526577; }
+        .careSummaryRow strong { color: #18383d; font-size: 16px; font-variant-numeric: tabular-nums; }
+        .compactDashboardContent > .panel { height: auto !important; min-height: 0 !important; display: flex; flex-direction: column; }
         .compactDashboardContent .tableWrapper { flex: 1; min-height: 0; max-height: none !important; height: auto !important; overflow-x: auto; overflow-y: visible !important; }
         .compactDashboardContent .dashboardNotePreview { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: normal !important; }
-        .compactDashboardContent .panel { padding: 16px 18px !important; }
-        .compactDashboardContent .panelHeader { margin-bottom: 10px !important; }
-        .compactDashboardContent .quickActions { gap: 10px !important; }
-        .compactDashboardContent .quickActions button { padding: 10px 12px !important; }
+        .compactDashboardContent .panel { padding: 12px 15px !important; }
+        .compactDashboardContent .panelHeader { margin-bottom: 6px !important; }
+        .compactDashboardContent .quickActions { gap: 7px !important; }
+        .compactDashboardContent .quickActions button { padding: 7px 10px !important; min-height: 0 !important; }
+        .compactDashboardContent .quickActions button small { line-height: 1.2 !important; }
+        .compactDashboardContent .tableWrapper th, .compactDashboardContent .tableWrapper td { padding-top: 8px !important; padding-bottom: 8px !important; }
+        /* Final desktop density pass: prioritize visibility of all Quick Actions. */
+        @media (min-width: 801px) {
+          .main:has(.compactDashboardWelcome) .topbar {
+            padding-top: 0 !important;
+            padding-bottom: 2px !important;
+            margin-bottom: 5px !important;
+          }
+          .main:has(.compactDashboardWelcome) .topbar h1 {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            line-height: 1.1 !important;
+          }
+          .compactDashboardWelcome {
+            padding: 8px 16px !important;
+            margin-bottom: 7px !important;
+          }
+          .compactDashboardWelcome h2 { font-size: 21px !important; line-height: 1.15 !important; }
+          .compactDashboardWelcome p { font-size: 14px !important; }
+          .compactDashboardWelcome .primaryButton { padding: 9px 15px !important; min-height: 0 !important; }
+          .compactDashboardStats { margin-bottom: 7px !important; gap: 9px !important; }
+          .compactDashboardStats .statCard { padding: 5px 10px !important; }
+          .compactDashboardStats .statCard > div { gap: 9px !important; }
+          .compactDashboardStats .statCard > div > span:first-child { width: 34px !important; height: 34px !important; }
+          .compactDashboardStats .statCard h2 { font-size: 22px !important; margin: 1px 0 !important; }
+          .compactDashboardStats .statCard p { font-size: 13px !important; line-height: 1.15 !important; }
+          .compactDashboardStats .statCard > div > div > span { font-size: 12px !important; line-height: 1.2 !important; }
+          .compactDashboardContent .panel { padding: 10px 13px !important; }
+          .compactDashboardContent .panelHeader { margin-bottom: 4px !important; }
+          .compactDashboardContent .quickActions { gap: 5px !important; }
+          .compactDashboardContent .quickActions button { padding: 6px 9px !important; }
+          .compactDashboardContent .tableWrapper th, .compactDashboardContent .tableWrapper td { padding-top: 6px !important; padding-bottom: 6px !important; }
+        }
+        /* Dashboard-only table sizing: no clipped clinical note previews or horizontal bar. */
+        .compactDashboardContent .tableWrapper { width: 100%; min-width: 0; overflow-x: hidden !important; }
+        .compactDashboardContent .tableWrapper table { width: 100% !important; min-width: 0 !important; table-layout: fixed; border-collapse: collapse; }
+        .compactDashboardContent .tableWrapper th,
+        .compactDashboardContent .tableWrapper td { min-width: 0 !important; overflow-wrap: anywhere; vertical-align: top; }
+        .compactDashboardContent .tableWrapper th:nth-child(1) { width: 19%; }
+        .compactDashboardContent .tableWrapper th:nth-child(2) { width: 17%; }
+        .compactDashboardContent .tableWrapper th:nth-child(3) { width: 15%; }
+        .compactDashboardContent .tableWrapper th:nth-child(4) { width: 49%; }
+        .compactDashboardContent .dashboardNotePreview { max-width: 100%; -webkit-line-clamp: 3; }
+        @media (min-width: 801px) {
+          .compactDashboardContent > .dashboardSideColumn { display: flex; flex-direction: column; height: 100% !important; }
+          .compactDashboardContent > .dashboardSideColumn > .homecarePhotoPanel { flex: 1 1 auto; min-height: 0 !important; }
+          .compactDashboardContent .homecareNursePhoto { flex: 1 1 auto; min-height: 210px; height: 100%; aspect-ratio: auto; object-fit: cover; }
+          .compactDashboardContent > .largePanel { display: flex; flex-direction: column; }
+          .compactDashboardContent .recordsCardFooter { margin-top: auto; }
+        }
         @media (max-width: 800px) {
+          .compactDashboardContent .tableWrapper th:nth-child(1) { width: 24%; }
+          .compactDashboardContent .tableWrapper th:nth-child(2) { width: 24%; }
+          .compactDashboardContent .tableWrapper th:nth-child(3) { width: 18%; }
+          .compactDashboardContent .tableWrapper th:nth-child(4) { width: 34%; }
+          .compactDashboardContent .homecareNursePhoto { height: auto; aspect-ratio: 16 / 10; }
+        }
+        @media (max-width: 800px) {
+          .compactDashboardContent > .dashboardSideColumn { order: -1; width: 100%; }
           .compactDashboardWelcome { padding: 18px !important; }
           .compactDashboardStats .statCard { padding: 14px !important; }
           .compactDashboardContent .panel { padding: 16px !important; height: auto !important; min-height: 0 !important; }
@@ -1275,12 +1535,6 @@ function Dashboard({
               <p>Latest progress notes</p>
             </div>
 
-            <button
-              className="textButton"
-              onClick={() => setActivePage("Records")}
-            >
-              View all
-            </button>
           </div>
 
           <div className="tableWrapper">
@@ -1312,7 +1566,7 @@ function Dashboard({
 
                       <td
                         style={{
-                          minWidth: 280,
+                          minWidth: 0,
                           whiteSpace: "normal",
                           overflowWrap: "anywhere",
                           wordBreak: "normal",
@@ -1335,8 +1589,14 @@ function Dashboard({
               </tbody>
             </table>
           </div>
+          <div className="recordsCardFooter">
+            <button className="textButton" onClick={() => setActivePage("Records")}>
+              View all patient records
+            </button>
+          </div>
         </div>
 
+        <div className="dashboardSideColumn">
         <div className="panel">
           <div className="panelHeader">
             <div>
@@ -1376,6 +1636,21 @@ function Dashboard({
               </div>
             </button>
           </div>
+        </div>
+
+        <div className="panel medicalOverviewPanel homecarePhotoPanel" aria-label="Compassionate home healthcare illustration">
+          <div className="homecarePhotoHeading">
+            <h3>Compassionate Care, Every Day</h3>
+            <p>Professional, patient-centered care at home</p>
+          </div>
+          <img
+            className="homecareNursePhoto"
+            src="/images/african-nurse-homecare.webp"
+            alt="Illustrative image of an African nurse measuring an older patient's blood pressure at home"
+            loading="lazy"
+          />
+          <p className="homecarePhotoCaption">Homecare illustration · Fictional people</p>
+        </div>
         </div>
       </section>
 
