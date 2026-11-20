@@ -1020,6 +1020,69 @@ async function handleSignOut() {
         @media (prefers-reduced-motion: reduce) {
           .app > .sidebar { transition: none !important; }
         }
+
+        /* Mobile account: never compress four identity fields into tiny columns. */
+        @media (max-width: 800px) {
+          .app .accountPanel { width: 100% !important; max-width: 100% !important; }
+          .app .accountInfo {
+            display: grid !important;
+            grid-template-columns: minmax(0,1fr) !important;
+            gap: 0 !important;
+            padding: 0 0 16px !important;
+          }
+          .app .accountInfo > div {
+            width: 100% !important; min-width: 0 !important;
+            padding: 12px 0 !important;
+            border-bottom: 1px solid #e2e8ea;
+          }
+          .app .accountInfo strong {
+            display: block !important; max-width: 100% !important;
+            overflow-wrap: anywhere !important; word-break: normal !important;
+            white-space: normal !important; line-height: 1.45 !important;
+          }
+          /* Progress notes become readable, full-width cards on phones. */
+          .app .recordsNotesTable, .app .patientNotesTable {
+            overflow-x: visible !important; width: 100% !important;
+          }
+          .app .recordsNotesTable table, .app .patientNotesTable table {
+            display: block !important; width: 100% !important;
+            min-width: 0 !important; table-layout: auto !important;
+          }
+          .app .recordsNotesTable thead, .app .patientNotesTable thead { display: none !important; }
+          .app .recordsNotesTable tbody, .app .patientNotesTable tbody { display: block !important; }
+          .app .recordsNotesTable tr, .app .patientNotesTable tr {
+            display: block !important; width: 100% !important;
+            border: 1px solid #e2e8ea; border-radius: 12px;
+            margin-bottom: 12px; padding: 10px 12px;
+            background: #fff;
+          }
+          .app .recordsNotesTable td, .app .patientNotesTable td {
+            display: block !important; width: 100% !important;
+            min-width: 0 !important; max-width: 100% !important;
+            padding: 7px 0 !important; border: 0 !important;
+            white-space: pre-wrap !important; overflow-wrap: anywhere !important;
+            word-break: normal !important; line-height: 1.55 !important;
+          }
+          .app .recordsNotesTable td:nth-child(1)::before { content: "Patient"; }
+          .app .recordsNotesTable td:nth-child(2)::before { content: "Date & time"; }
+          .app .recordsNotesTable td:nth-child(3)::before { content: "Entered by"; }
+          .app .recordsNotesTable td:nth-child(4)::before { content: "Progress note"; }
+          .app .patientNotesTable td:nth-child(1)::before { content: "Date & time"; }
+          .app .patientNotesTable td:nth-child(2)::before { content: "Entered by"; }
+          .app .patientNotesTable td:nth-child(3)::before { content: "Progress note"; }
+          .app .patientNotesTable td:nth-child(4)::before { content: "Actions"; }
+          .app .recordsNotesTable td::before, .app .patientNotesTable td::before {
+            display: block; font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em;
+            color: #6e8186; margin-bottom: 3px;
+          }
+          .app .recordsNotesTable td[colspan]::before,
+          .app .patientNotesTable td[colspan]::before { content: none !important; }
+          /* Dashboard remains compact but allows readable note previews. */
+          .app .compactDashboardContent .dashboardNotePreview {
+            white-space: normal !important; overflow-wrap: anywhere !important;
+          }
+        }
       `}</style>
       {mobileMenuOpen && <button type="button" className="mobileMenuBackdrop" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)} />}
       <div className="app" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
@@ -3246,7 +3309,7 @@ async function handleRecordUpdate() {
           </div>
         )}
 
-        <div className="tableWrapper">
+        <div className={patientHistoryView === "notes" ? "tableWrapper patientNotesTable" : "tableWrapper"}>
           {patientHistoryView === "notes" ? (
             <table>
               <thead>
@@ -4654,7 +4717,7 @@ function Records({
         </div>
       )}
 
-      <div className="tableWrapper">
+      <div className={showNotesColumn && !showVitalsColumns ? "tableWrapper recordsNotesTable" : "tableWrapper"}>
         <table>
           <thead>
             <tr>
