@@ -62,6 +62,11 @@ type Treatment = {
   id: string;
   patientId: string;
   medication: string;
+  dose: string | null;
+  frequency: string | null;
+  route: string | null;
+  startedOn: string | null;
+  endedOn: string | null;
   createdAt: string;
 };
 
@@ -583,33 +588,6 @@ function NavIcon({ name }: { name: string }) {
   return <svg {...common}><circle cx="12" cy="8" r="3" /><path d="M5 21a7 7 0 0 1 14 0" /><circle cx="12" cy="12" r="10" /></svg>;
 }
 
-function DashboardStatIcon({ type }: { type: "patients" | "records" | "staff" | "notes" }) {
-  if (type === "patients") {
-    return (
-      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" aria-hidden="true">
-        <circle cx="9" cy="8" r="3" fill="currentColor" />
-        <circle cx="16.5" cy="9" r="2.5" fill="currentColor" opacity="0.82" />
-        <path d="M3.5 19c.5-4 2.8-6 5.5-6s5 2 5.5 6H3.5Z" fill="currentColor" />
-        <path d="M13.5 19c.3-2.7 1.7-4.5 4-4.5 2.1 0 3.6 1.6 4 4.5h-8Z" fill="currentColor" opacity="0.82" />
-      </svg>
-    );
-  }
-  if (type === "staff") {
-    return (
-      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" aria-hidden="true">
-        <circle cx="12" cy="7.5" r="4" fill="currentColor" />
-        <path d="M5 20c.4-4.7 3-7 7-7s6.6 2.3 7 7H5Z" fill="currentColor" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" width="27" height="27" fill="none" aria-hidden="true">
-      <path d="M7 3.5h7l4 4V20.5H7V3.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M14 3.5v4h4M10 12h5M10 15.5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function HomeCareApp({
   session,
   profile,
@@ -619,11 +597,6 @@ function HomeCareApp({
 }) {
   const [activePage, setActivePage] = useState("Dashboard");
   const [signingOut, setSigningOut] = useState(false);
-  const [dashboardNote, setDashboardNote] = useState<{
-    patient: string;
-    note: string;
-  } | null>(null);
-  const [showDashboardRoster, setShowDashboardRoster] = useState(false);
 
   const [patients, setPatients] = useState<Patient[]>([]);
 const [patientsLoading, setPatientsLoading] = useState(true);
@@ -633,23 +606,6 @@ const [recordsLoading, setRecordsLoading] = useState(true);
   const [organizationName, setOrganizationName] = useState("Your Organization");
 
   const activePatients = patients.filter((patient) => patient.active).length;
-
-  // Dashboard summary values derived from the formatted VitalRecord data.
-  const todayKey = formatNumericDate(new Date());
-
-  const recordsTodayCount = records.filter(
-    (record) => record.date === todayKey
-  ).length;
-
-  const notesTodayCount = records.filter(
-    (record) =>
-      record.date === todayKey &&
-      Boolean(record.note && record.note !== "—")
-  ).length;
-
-  const recentRecords = records
-    .filter((record) => record.note && record.note !== "—")
-    .slice(0, 3);
 
   const displayName =
     profile.full_name ||
@@ -931,583 +887,7 @@ async function handleSignOut() {
 
   return (
     <div className="app">
-      <style>{`
-        /* Dashboard shell: override the older fixed-sidebar layout in globals.css. */
-        .app {
-          display: flex !important;
-          align-items: stretch !important;
-          min-height: 100vh !important;
-          width: 100% !important;
-          background: #f5f9fa !important;
-          overflow: visible !important;
-        }
-
-        .app > .sidebar {
-          position: sticky !important;
-          top: 0 !important;
-          left: auto !important;
-          bottom: auto !important;
-          width: 310px !important;
-          min-width: 310px !important;
-          flex: 0 0 310px !important;
-          height: 100vh !important;
-          min-height: 100vh !important;
-          box-sizing: border-box !important;
-          overflow-y: auto !important;
-          overflow-x: hidden !important;
-          z-index: 20 !important;
-        }
-
-        .app > .main {
-          position: relative !important;
-          margin-left: 0 !important;
-          left: auto !important;
-          width: auto !important;
-          max-width: none !important;
-          min-width: 0 !important;
-          flex: 1 1 auto !important;
-          box-sizing: border-box !important;
-          padding-left: 34px !important;
-          padding-right: 34px !important;
-          padding-bottom: 36px !important;
-          overflow-x: hidden !important;
-        }
-
-        .app > .main > .topbar {
-          width: 100% !important;
-          box-sizing: border-box !important;
-        }
-
-        .hh-stat-grid > div {
-          min-width: 0 !important;
-          box-sizing: border-box !important;
-        }
-
-        @media (max-width: 1380px) {
-          .app > .sidebar {
-            width: 270px !important;
-            min-width: 270px !important;
-            flex-basis: 270px !important;
-          }
-          .app > .main {
-            padding-left: 24px !important;
-            padding-right: 24px !important;
-          }
-          .hh-stat-grid {
-            gap: 14px !important;
-          }
-          .hh-stat-grid > div {
-            grid-template-columns: 54px minmax(0,1fr) !important;
-            gap: 12px !important;
-            padding: 18px !important;
-          }
-          .hh-stat-grid > div > div:first-child {
-            width: 52px !important;
-            height: 52px !important;
-          }
-        }
-
-        @media (max-width:1180px) {
-          .hh-stat-grid {
-            grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-          }
-          .hh-dashboard-lower {
-            grid-template-columns:1fr !important;
-          }
-        }
-
-        @media (max-width:820px) {
-          .app {
-            display:block !important;
-          }
-          .app > .sidebar {
-            position:relative !important;
-            width:100% !important;
-            min-width:100% !important;
-            height:auto !important;
-            min-height:auto !important;
-          }
-          .app > .main {
-            width:100% !important;
-            padding-left:18px !important;
-            padding-right:18px !important;
-          }
-          .hh-stat-grid {
-            grid-template-columns:1fr !important;
-          }
-        }
-
-        /* Keep the sidebar usable on shorter laptop screens without browser zoom. */
-        @media (min-width:821px) and (max-height:700px) {
-          .app > .sidebar .logo {
-            margin-bottom: 12px !important;
-          }
-          .app > .sidebar .navButton {
-            min-height: 48px !important;
-          }
-          .app > .sidebar .sidebarBottom {
-            padding-top: 6px !important;
-          }
-          .app > .sidebar .logoutButton {
-            min-height: 54px !important;
-            margin-top: 10px !important;
-          }
-        }
-
-        /* FINAL APPROVED COMPACT DASHBOARD */
-        @media (min-width: 821px) {
-          .app > .sidebar {
-            width: 265px !important;
-            min-width: 265px !important;
-            flex-basis: 265px !important;
-            padding: 22px 16px 16px !important;
-          }
-          .app > .sidebar .logo {
-            margin-bottom: 18px !important;
-          }
-          .app > .sidebar .logoIcon {
-            width: 50px !important;
-            height: 50px !important;
-            min-width: 50px !important;
-          }
-          .app > .sidebar .logo h2 {
-            font-size: 20px !important;
-          }
-          .app > .sidebar .logo span {
-            font-size: 12px !important;
-          }
-          .app > .sidebar nav {
-            gap: 3px !important;
-          }
-          .app > .sidebar .navButton {
-            min-height: 48px !important;
-            padding: 0 14px !important;
-          }
-          .app > .sidebar .navButton span:last-child {
-            font-size: 15px !important;
-          }
-          .app > .sidebar .sidebarBottom {
-            padding-top: 10px !important;
-          }
-          .app > .sidebar .organizationBadge {
-            margin-bottom: 12px !important;
-          }
-          .app > .sidebar .userMini {
-            margin-top: 10px !important;
-          }
-          .app > .sidebar .logoutButton {
-            min-height: 56px !important;
-            margin-top: 12px !important;
-          }
-          .app > .main {
-            padding-left: 28px !important;
-            padding-right: 28px !important;
-            padding-bottom: 24px !important;
-          }
-          .app > .main > .topbar {
-            min-height: 92px !important;
-            padding-top: 16px !important;
-            padding-bottom: 14px !important;
-            margin-bottom: 20px !important;
-          }
-          .app > .main > .topbar h1 {
-            font-size: 29px !important;
-          }
-        }
-
-        /* ONE-SCREEN DASHBOARD AT 100% ZOOM */
-        @media (min-width: 821px) {
-          html, body {
-            height: 100%;
-          }
-
-          .app {
-            height: 100vh !important;
-            min-height: 100vh !important;
-            overflow: hidden !important;
-          }
-
-          .app > .sidebar {
-            height: 100vh !important;
-            min-height: 100vh !important;
-            overflow: hidden !important;
-          }
-
-          .app > .main.dashboardMain {
-            height: 100vh !important;
-            min-height: 0 !important;
-            overflow: hidden !important;
-            display: flex !important;
-            flex-direction: column !important;
-            padding-bottom: 14px !important;
-          }
-
-          .app > .main.dashboardMain > .topbar {
-            flex: 0 0 82px !important;
-            min-height: 82px !important;
-            height: 82px !important;
-            margin-bottom: 14px !important;
-            padding-top: 10px !important;
-            padding-bottom: 10px !important;
-          }
-
-          .app > .main.dashboardMain > .topbar h1 {
-            font-size: 27px !important;
-            line-height: 1.05 !important;
-          }
-
-          .app > .main.dashboardMain > .topbar .eyebrow {
-            margin-bottom: 6px !important;
-          }
-
-          .hh-dashboard-screen {
-            flex: 1 1 auto !important;
-            min-height: 0 !important;
-            height: calc(100vh - 110px) !important;
-            display: grid !important;
-            grid-template-rows: 108px 116px minmax(0, 1fr) !important;
-            gap: 14px !important;
-            overflow: hidden !important;
-          }
-
-          .hh-dashboard-hero {
-            min-height: 0 !important;
-            height: 108px !important;
-            padding: 18px 28px !important;
-          }
-
-          .hh-dashboard-hero h2 {
-            font-size: 27px !important;
-          }
-
-          .hh-stat-grid {
-            margin-top: 0 !important;
-            height: 116px !important;
-            gap: 12px !important;
-          }
-
-          .hh-stat-grid > div {
-            min-height: 0 !important;
-            height: 116px !important;
-            padding: 14px 17px !important;
-          }
-
-          .hh-dashboard-lower {
-            margin-top: 0 !important;
-            min-height: 0 !important;
-            height: 100% !important;
-            overflow: hidden !important;
-          }
-
-          .hh-recent-panel,
-          .hh-quick-panel {
-            min-height: 0 !important;
-            height: 100% !important;
-            overflow: hidden !important;
-            box-sizing: border-box !important;
-          }
-
-          .hh-recent-panel {
-            display: flex !important;
-            flex-direction: column !important;
-          }
-
-          .hh-records-scroll {
-            flex: 1 1 auto !important;
-            min-height: 0 !important;
-            overflow-y: auto !important;
-            overflow-x: auto !important;
-          }
-
-          .hh-quick-panel {
-            display: flex !important;
-            flex-direction: column !important;
-          }
-
-          .hh-quick-panel > button {
-            min-height: 58px !important;
-            height: 58px !important;
-            margin-top: 7px !important;
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
-          }
-
-          .hh-quick-panel > button span {
-            line-height: 1.15 !important;
-          }
-        }
-
-        @media (min-width: 821px) and (max-height: 760px) {
-          .app > .sidebar {
-            padding-top: 14px !important;
-            padding-bottom: 10px !important;
-          }
-          .app > .sidebar .logo {
-            margin-bottom: 10px !important;
-          }
-          .app > .sidebar .navButton {
-            min-height: 43px !important;
-          }
-          .app > .sidebar .sidebarBottom {
-            padding-top: 5px !important;
-          }
-          .app > .sidebar .organizationBadge {
-            margin-bottom: 6px !important;
-          }
-          .app > .sidebar .userMini {
-            margin-top: 5px !important;
-          }
-          .app > .sidebar .logoutButton {
-            min-height: 48px !important;
-            margin-top: 7px !important;
-          }
-          .hh-dashboard-screen {
-            grid-template-rows: 96px 104px minmax(0, 1fr) !important;
-            gap: 10px !important;
-          }
-          .hh-dashboard-hero {
-            height: 96px !important;
-            padding: 14px 24px !important;
-          }
-          .hh-stat-grid,
-          .hh-stat-grid > div {
-            height: 104px !important;
-          }
-        }
-
-
-        /* Non-dashboard pages must keep their original scrolling and interactions. */
-        @media (min-width: 821px) {
-          .app > .main:not(.dashboardMain) {
-            height: auto !important;
-            min-height: 100vh !important;
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            display: block !important;
-          }
-
-          .app > .main:not(.dashboardMain) > .topbar {
-            height: auto !important;
-            min-height: 92px !important;
-            margin-bottom: 20px !important;
-          }
-        }
-
-
-        /* Dashboard spacing safety fix — layout only.
-           Keep the four KPI cards above the lower panels with a real gap. */
-        @media (min-width: 821px) {
-          .dashboardMain .hh-dashboard-screen {
-            display: grid !important;
-            grid-template-rows: auto 122px minmax(0, 1fr) !important;
-            row-gap: 10px !important;
-            min-height: 0 !important;
-          }
-
-          .dashboardMain .hh-stat-grid {
-            align-self: start !important;
-            min-height: 0 !important;
-            margin: 0 !important;
-            position: relative !important;
-            z-index: 2 !important;
-          }
-
-          .dashboardMain .hh-stat-grid > * {
-            min-height: 122px !important;
-            height: 122px !important;
-          }
-
-          .dashboardMain .hh-stat-grid > * > div:last-child > div:nth-child(2) {
-            margin-top: 3px !important;
-          }
-
-          .dashboardMain .hh-stat-grid > * > div:last-child > div:nth-child(3) {
-            margin-top: 7px !important;
-            line-height: 1.2 !important;
-          }
-
-          .dashboardMain .hh-dashboard-lower {
-            align-self: stretch !important;
-            min-height: 0 !important;
-            margin-top: 0 !important;
-            position: relative !important;
-            z-index: 1 !important;
-          }
-        }
-
-        /* FINAL COMPACT DASHBOARD — approved one-screen layout */
-        @media (min-width: 821px) {
-          .hh-dashboard-screen {
-            grid-template-rows: 96px 112px minmax(0, 1fr) !important;
-            gap: 12px !important;
-          }
-
-          .hh-dashboard-hero {
-            height: 96px !important;
-            min-height: 96px !important;
-            padding: 14px 24px !important;
-          }
-
-          .hh-dashboard-hero h2 {
-            font-size: 25px !important;
-            line-height: 1.08 !important;
-          }
-
-          .hh-dashboard-hero p {
-            margin-top: 7px !important;
-            font-size: 15px !important;
-            line-height: 1.25 !important;
-          }
-
-          .hh-stat-grid {
-            height: 112px !important;
-            min-height: 112px !important;
-            gap: 12px !important;
-          }
-
-          .hh-stat-grid > div {
-            height: 112px !important;
-            min-height: 112px !important;
-            padding: 12px 14px !important;
-            grid-template-columns: 50px minmax(0, 1fr) !important;
-            gap: 12px !important;
-            overflow: hidden !important;
-          }
-
-          .hh-stat-grid > div > div:first-child {
-            width: 48px !important;
-            height: 48px !important;
-            border-radius: 12px !important;
-          }
-
-          .hh-stat-grid > div > div:last-child {
-            min-width: 0 !important;
-          }
-
-          .hh-stat-grid > div > div:last-child > div:nth-child(1) {
-            font-size: 14px !important;
-            line-height: 1.1 !important;
-            white-space: nowrap !important;
-          }
-
-          .hh-stat-grid > div > div:last-child > div:nth-child(2) {
-            margin-top: 3px !important;
-            font-size: 29px !important;
-            line-height: 1 !important;
-          }
-
-          .hh-stat-grid > div > div:last-child > div:nth-child(3) {
-            margin-top: 7px !important;
-            font-size: 12px !important;
-            line-height: 1.15 !important;
-            white-space: normal !important;
-          }
-
-          .hh-dashboard-lower {
-            gap: 16px !important;
-            min-height: 0 !important;
-          }
-
-          .hh-recent-panel,
-          .hh-quick-panel {
-            padding: 16px 18px !important;
-          }
-
-          .hh-recent-panel > div:first-child {
-            margin-bottom: 8px !important;
-          }
-
-          .hh-recent-panel h3,
-          .hh-quick-panel h3 {
-            font-size: 18px !important;
-            line-height: 1.15 !important;
-          }
-
-          .hh-recent-panel p,
-          .hh-quick-panel p {
-            margin-top: 3px !important;
-            font-size: 12px !important;
-          }
-
-          .hh-records-scroll {
-            overflow: hidden !important;
-          }
-
-          .hh-records-scroll table {
-            table-layout: fixed !important;
-          }
-
-          .hh-records-scroll thead th {
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
-            font-size: 10px !important;
-          }
-
-          .hh-records-scroll tbody td {
-            padding-top: 9px !important;
-            padding-bottom: 9px !important;
-            font-size: 12px !important;
-            line-height: 1.25 !important;
-          }
-
-          .hh-records-scroll tbody tr {
-            height: 58px !important;
-          }
-
-          .hh-quick-panel > button {
-            height: 58px !important;
-            min-height: 58px !important;
-            margin-top: 7px !important;
-            padding: 7px 12px !important;
-            grid-template-columns: 36px minmax(0,1fr) 14px !important;
-            gap: 9px !important;
-          }
-
-          .hh-quick-panel > button span span:first-child {
-            font-size: 13px !important;
-          }
-
-          .hh-quick-panel > button span span:last-child {
-            margin-top: 2px !important;
-            font-size: 12px !important;
-            line-height: 1.1 !important;
-          }
-        }
-
-        @media (min-width: 821px) and (max-height: 700px) {
-          .hh-dashboard-screen {
-            grid-template-rows: 88px 102px minmax(0, 1fr) !important;
-            gap: 9px !important;
-          }
-
-          .hh-dashboard-hero {
-            height: 88px !important;
-            min-height: 88px !important;
-          }
-
-          .hh-stat-grid,
-          .hh-stat-grid > div {
-            height: 102px !important;
-            min-height: 102px !important;
-          }
-
-          .hh-records-scroll tbody tr {
-            height: 52px !important;
-          }
-
-          .hh-records-scroll tbody td {
-            padding-top: 6px !important;
-            padding-bottom: 6px !important;
-          }
-
-          .hh-quick-panel > button {
-            height: 52px !important;
-            min-height: 52px !important;
-            margin-top: 5px !important;
-          }
-        }
-      `}</style>
-      <aside className="sidebar" style={{ minHeight:"100vh", width:310, flex:"0 0 310px", display:"flex", flexDirection:"column", background:"linear-gradient(180deg,#0d4f54 0%,#005d5c 100%)" }}>
+      <aside className="sidebar">
         <div>
           <div className="logo">
             <div className="logoIcon">+</div>
@@ -1522,15 +902,26 @@ async function handleSignOut() {
 
           <nav>
             {menuItems.map((item) => (
-              <button key={item} className={activePage === item ? "navButton active" : "navButton"} onClick={() => setActivePage(item)} style={{ display:"grid", gridTemplateColumns:"34px minmax(0,1fr)", alignItems:"center", gap:12, width:"100%", minHeight:58, padding:"0 18px", borderRadius:10, textAlign:"left" }}>
-                <span className="navIcon" style={{ width:34, height:34, display:"grid", placeItems:"center", flexShrink:0 }}><NavIcon name={item} /></span>
-                <span style={{ fontSize:16, lineHeight:1.2 }}>{item}</span>
+              <button
+                key={item}
+                className={
+                  activePage === item ? "navButton active" : "navButton"
+                }
+                onClick={() => setActivePage(item)}
+              >
+                <span
+                  className="navIcon"
+                  style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}
+                >
+                  <NavIcon name={item} />
+                </span>
+                <span>{item}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="sidebarBottom" style={{ marginTop:"auto", paddingTop:12 }}>
+        <div className="sidebarBottom">
           <div
             className="organizationBadge"
             style={{
@@ -1567,13 +958,17 @@ async function handleSignOut() {
             </div>
           </div>
 
-          <button type="button" className="logoutButton" onClick={handleSignOut} disabled={signingOut} style={{ width:"100%", minHeight:66, marginTop:18, padding:"0 18px", borderRadius:11, border:"1px solid rgba(255,255,255,.55)", background:"rgba(255,255,255,.035)", color:"#fff", display:"flex", alignItems:"center", gap:18, fontSize:17, fontWeight:750, cursor:signingOut ? "not-allowed" : "pointer" }}>
-            <span style={{ fontSize:28, lineHeight:1 }}>⇥</span><span>{signingOut ? "Signing Out..." : "Sign Out"}</span>
+          <button
+            className="logoutButton"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? "Signing Out..." : "Sign Out"}
           </button>
         </div>
       </aside>
 
-      <main className={activePage === "Dashboard" ? "main dashboardMain" : "main"} style={{ minWidth:0, paddingLeft:34, paddingRight:34, paddingBottom:36 }}>
+      <main className="main">
         <header className="topbar">
           <div>
             <p className="eyebrow">HEALTHY HOMECARE</p>
@@ -1594,299 +989,17 @@ async function handleSignOut() {
         </header>
 
         {activePage === "Dashboard" && (
-        <div className="hh-dashboard-screen" style={{ width: "100%", maxWidth: 1450, margin: "0 auto" }}>
-          <section className="hh-dashboard-hero" style={{ minHeight: 118, borderRadius: 16, padding: "22px 30px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, color: "#fff", background: "radial-gradient(circle at 92% 20%, rgba(255,255,255,.08) 0 120px, transparent 121px), radial-gradient(circle at 95% 40%, rgba(255,255,255,.045) 0 210px, transparent 211px), linear-gradient(135deg,#0c7773 0%,#14988f 100%)", boxShadow: "0 8px 24px rgba(10,75,72,.10)" }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: "clamp(26px,2vw,34px)", lineHeight: 1.15, fontWeight: 700, letterSpacing: "-.02em" }}>Patient monitoring dashboard</h2>
-              <p style={{ margin: "10px 0 0", fontSize: 17, lineHeight: 1.45, color: "rgba(255,255,255,.92)" }}>Review recent homecare activity and quickly enter new patient observations.</p>
-            </div>
-            <button type="button" onClick={() => setActivePage("New Record")} style={{ flexShrink: 0, minWidth: 190, height: 54, border: 0, borderRadius: 12, background: "#fff", color: "#006b68", fontSize: 17, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>+&nbsp; New Record</button>
-          </section>
+          <Dashboard
+            records={records}
+            activePatients={activePatients}
+            setActivePage={setActivePage}
+            profile={profile}
+            session={session}
+            activeStaffCount={activeStaffCount}
+          />
+        )}
 
-          <section className="hh-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 18 }}>
-            {[
-              { label: "Active Patients", value: activePatients, note: "Currently monitored", icon: "patients" as const, color: "#07936f", bg: "#e2f7ef" },
-              { label: "Records Today", value: recordsTodayCount, note: "Clinical observations today", icon: "records" as const, color: "#1677df", bg: "#e6f2ff" },
-              { label: "Active Staff", value: activeStaffCount, note: "View weekly roster", icon: "staff" as const, color: "#07936f", bg: "#e2f7ef" },
-              { label: "Today's Notes", value: notesTodayCount, note: "Progress notes recorded today", icon: "notes" as const, color: "#6938ef", bg: "#f0eaff" },
-            ].map((item) => {
-              const isStaffCard = item.label === "Active Staff";
-
-              return (
-                <button
-                  type="button"
-                  key={item.label}
-                  onClick={
-                    isStaffCard
-                      ? () => setShowDashboardRoster(true)
-                      : undefined
-                  }
-                  aria-label={
-                    isStaffCard
-                      ? "Open weekly staff roster"
-                      : undefined
-                  }
-                  style={{
-                    minHeight: 132,
-                    padding: "18px 20px",
-                    display: "grid",
-                    gridTemplateColumns: "56px minmax(0,1fr)",
-                    alignItems: "center",
-                    gap: 18,
-                    border: "1px solid #dce4e8",
-                    borderRadius: 16,
-                    background: "#fff",
-                    boxShadow: "0 4px 16px rgba(20,45,60,.035)",
-                    width: "100%",
-                    font: "inherit",
-                    textAlign: "left",
-                    cursor: isStaffCard ? "pointer" : "default",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 54,
-                      height: 54,
-                      borderRadius: 15,
-                      display: "grid",
-                      placeItems: "center",
-                      background: item.bg,
-                      color: item.color,
-                    }}
-                  >
-                    <DashboardStatIcon type={item.icon} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 16, color: "#4f6272", fontWeight: 500 }}>
-                      {item.label}
-                    </div>
-                    <div style={{ marginTop: 5, fontSize: 34, lineHeight: 1, color: "#071b2a", fontWeight: 700 }}>
-                      {item.value}
-                    </div>
-                    <div style={{ marginTop: 12, fontSize: 14, color: "#627384" }}>
-                      {item.note}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </section>
-
-          <section className="hh-dashboard-lower" style={{ display: "grid", gridTemplateColumns: "minmax(0,2.15fr) minmax(310px,1fr)", gap: 20, marginTop: 16, alignItems: "start" }}>
-            <div className="hh-recent-panel" style={{ border: "1px solid #dce4e8", borderRadius: 16, background: "#fff", padding: "20px 22px", minWidth: 0, boxShadow: "0 4px 16px rgba(20,45,60,.035)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 20, marginBottom: 18 }}>
-                <div><h3 style={{ margin: 0, fontSize: 20, color: "#071b2a", fontWeight: 750 }}>Recent patient records</h3><p style={{ margin: "5px 0 0", color: "#657686", fontSize: 14 }}>Latest progress notes</p></div>
-                <button type="button" onClick={() => setActivePage("Records")} style={{ border: 0, background: "transparent", color: "#00736d", fontSize: 16, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>View all</button>
-              </div>
-              <div className="hh-records-scroll" style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-                  <thead><tr style={{ borderBottom: "1px solid #dce4e8", color: "#657686", fontSize: 12, textTransform: "uppercase", letterSpacing: ".03em" }}>
-                    <th style={{ width: "17%", padding: "12px 8px", textAlign: "left" }}>Patient</th><th style={{ width: "16%", padding: "12px 8px", textAlign: "left" }}>Date &amp; Time</th><th style={{ width: "17%", padding: "12px 8px", textAlign: "left" }}>Entered By</th><th style={{ width: "50%", padding: "12px 8px", textAlign: "left" }}>Progress Note</th>
-                  </tr></thead>
-                  <tbody>
-                    {recentRecords.length === 0 ? <tr><td colSpan={4} style={{ padding: "34px 8px", textAlign: "center", color: "#71808e" }}>No records yet.</td></tr> :
-                      recentRecords.map((record) => (
-                        <tr key={record.id} style={{ borderBottom: "1px solid #e5eaed", verticalAlign: "top" }}>
-                          <td style={{ padding: "18px 8px", fontSize: 14, fontWeight: 750, color: "#071b2a" }}>{record.patient}</td>
-                          <td style={{ padding: "18px 8px", fontSize: 14, lineHeight: 1.45, color: "#203849" }}>{`${record.date} · ${record.time}`}</td>
-                          <td style={{ padding: "18px 8px", fontSize: 14, color: "#203849" }}>{record.enteredBy}</td>
-                          <td
-                            style={{
-                              padding: "18px 8px",
-                              fontSize: 14,
-                              lineHeight: 1.35,
-                              color: "#203849",
-                              overflowWrap: "anywhere",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "-webkit-box",
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: "vertical",
-                                overflow: "hidden",
-                              }}
-                            >
-                              {record.note}
-                            </div>
-                            {record.note.length > 90 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDashboardNote({
-                                    patient: record.patient,
-                                    note: record.note,
-                                  })
-                                }
-                                style={{
-                                  marginTop: 3,
-                                  padding: 0,
-                                  border: 0,
-                                  background: "transparent",
-                                  color: "#007b76",
-                                  fontSize: 11,
-                                  fontWeight: 800,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                View more
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="hh-quick-panel" style={{ border: "1px solid #dce4e8", borderRadius: 16, background: "#fff", padding: 20, boxShadow: "0 4px 16px rgba(20,45,60,.035)" }}>
-              <h3 style={{ margin: 0, fontSize: 20, color: "#071b2a", fontWeight: 750 }}>Quick actions</h3>
-              <p style={{ margin: "5px 0 16px", color: "#657686", fontSize: 14 }}>Common activities</p>
-              {[
-                { title: "New record", subtitle: "Add progress note or vitals", page: "New Record", icon: "plus" },
-                { title: "Patients", subtitle: "View patient list", page: "Patients", icon: "patients" },
-                { title: "Clinical records", subtitle: "Search patient history", page: "Records", icon: "records" },
-              ].map((action) => (
-                <button type="button" key={action.title} onClick={() => setActivePage(action.page)} style={{ width: "100%", minHeight: 66, marginTop: 8, border: "1px solid #d9e2e6", borderRadius: 12, background: "#fbfdfd", display: "grid", gridTemplateColumns: "42px minmax(0,1fr) 18px", alignItems: "center", gap: 12, padding: "12px 16px", textAlign: "left", cursor: "pointer", color: "#071b2a" }}>
-                  <span style={{ display: "grid", placeItems: "center", color: "#00847e" }}>{action.icon === "plus" ? <span style={{ fontSize: 34, lineHeight: 1, fontWeight: 700 }}>+</span> : action.icon === "patients" ? <DashboardStatIcon type="patients" /> : <DashboardStatIcon type="records" />}</span>
-                  <span><span style={{ display: "block", fontSize: 15, fontWeight: 750 }}>{action.title}</span><span style={{ display: "block", marginTop: 4, fontSize: 14, color: "#657686" }}>{action.subtitle}</span></span>
-                  <span style={{ color: "#007b76", fontSize: 24 }}>›</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {showDashboardRoster && (
-        <StaffRoster
-          profile={profile}
-          session={session}
-          onClose={() => setShowDashboardRoster(false)}
-        />
-      )}
-
-      {dashboardNote && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full progress note"
-          onClick={() => setDashboardNote(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "grid",
-            placeItems: "center",
-            padding: 20,
-            background: "rgba(4, 25, 32, 0.52)",
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "min(620px, 94vw)",
-              maxHeight: "78vh",
-              overflowY: "auto",
-              borderRadius: 16,
-              background: "#ffffff",
-              boxShadow: "0 24px 70px rgba(0,0,0,.22)",
-              padding: "22px 24px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 20,
-                marginBottom: 16,
-              }}
-            >
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    color: "#071b2a",
-                    fontSize: 20,
-                    fontWeight: 800,
-                  }}
-                >
-                  Progress note
-                </h3>
-                <div
-                  style={{
-                    marginTop: 4,
-                    color: "#647584",
-                    fontSize: 13,
-                  }}
-                >
-                  {dashboardNote.patient}
-                </div>
-              </div>
-              <button
-                type="button"
-                aria-label="Close progress note"
-                onClick={() => setDashboardNote(null)}
-                style={{
-                  width: 34,
-                  height: 34,
-                  border: "1px solid #d8e2e6",
-                  borderRadius: 9,
-                  background: "#ffffff",
-                  color: "#405461",
-                  fontSize: 22,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div
-              style={{
-                whiteSpace: "pre-wrap",
-                overflowWrap: "anywhere",
-                color: "#203849",
-                fontSize: 14,
-                lineHeight: 1.6,
-              }}
-            >
-              {dashboardNote.note}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: 20,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setDashboardNote(null)}
-                style={{
-                  minWidth: 92,
-                  height: 40,
-                  border: 0,
-                  borderRadius: 9,
-                  background: "#007b76",
-                  color: "#ffffff",
-                  fontSize: 13,
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activePage === "New Record" && (
+        {activePage === "New Record" && (
           <NewRecord
   patients={patients}
   onRecordSaved={loadRecords}
@@ -2011,7 +1124,7 @@ function Dashboard({
         </button>
       </section>
 
-      <section className="statsGrid">
+      <section className="statsGrid" style={{ alignItems: "stretch" }}>
         <StatCard
           title="Active Patients"
           value={String(activePatients)}
@@ -2038,8 +1151,8 @@ function Dashboard({
         />
       </section>
 
-      <section className="contentGrid">
-        <div className="panel largePanel">
+      <section className="contentGrid" style={{ alignItems: "start" }}>
+        <div className="panel largePanel" style={{ height: 365, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div className="panelHeader">
             <div>
               <h3>Recent patient records</h3>
@@ -2054,7 +1167,7 @@ function Dashboard({
             </button>
           </div>
 
-          <div className="tableWrapper">
+          <div className="tableWrapper" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto" }}>
             <table>
               <thead>
                 <tr>
@@ -2085,6 +1198,8 @@ function Dashboard({
                         style={{
                           minWidth: 280,
                           whiteSpace: "normal",
+                          overflowWrap: "anywhere",
+                          wordBreak: "normal",
                         }}
                       >
                         {record.note}
@@ -2106,7 +1221,7 @@ function Dashboard({
           </div>
         </div>
 
-        <div className="panel">
+        <div className="panel" style={{ alignSelf: "start", height: "fit-content" }}>
           <div className="panelHeader">
             <div>
               <h3>Quick actions</h3>
@@ -2118,7 +1233,7 @@ function Dashboard({
             <button
               onClick={() => setActivePage("New Record")}
             >
-              <span aria-hidden="true">✚</span>
+              <span aria-hidden="true"><NavIcon name="New Record" /></span>
               <div>
                 <strong>New record</strong>
                 <small>Add progress note or vitals</small>
@@ -2128,7 +1243,7 @@ function Dashboard({
             <button
               onClick={() => setActivePage("Patients")}
             >
-              <span aria-hidden="true">◎</span>
+              <span aria-hidden="true"><NavIcon name="Patients" /></span>
               <div>
                 <strong>Patients</strong>
                 <small>View patient list</small>
@@ -2138,7 +1253,7 @@ function Dashboard({
             <button
               onClick={() => setActivePage("Records")}
             >
-              <span aria-hidden="true">▦</span>
+              <span aria-hidden="true"><NavIcon name="Records" /></span>
               <div>
                 <strong>Clinical records</strong>
                 <small>Search patient history</small>
@@ -2159,6 +1274,14 @@ function Dashboard({
   );
 }
 
+function DashboardCardIcon({ kind }: { kind: "patients" | "records" | "staff" | "notes" }) {
+  const common = { width: 27, height: 27, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true as const };
+  if (kind === "patients") return <svg {...common}><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 8a3 3 0 0 1 0 6M18 17a5 5 0 0 1 3 4"/></svg>;
+  if (kind === "staff") return <svg {...common}><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>;
+  if (kind === "notes") return <svg {...common}><path d="M6 3h9l3 3v15H6zM14 3v4h4M9 12h6M9 16h6"/></svg>;
+  return <svg {...common}><path d="M6 3h9l3 3v15H6zM14 3v4h4M9 12h6M9 16h6"/></svg>;
+}
+
 function StatCard({
   title,
   value,
@@ -2170,12 +1293,12 @@ function StatCard({
   detail: string;
   onClick?: () => void;
 }) {
+  const kind = title === "Active Patients" ? "patients" : title === "Active Staff" ? "staff" : title === "Today's Notes" ? "notes" : "records";
   const content = (
-    <>
-      <p>{title}</p>
-      <h2>{value}</h2>
-      <span>{detail}</span>
-    </>
+    <div style={{ display: "flex", alignItems: "center", gap: 18, minWidth: 0, width: "100%" }}>
+      <span aria-hidden="true" style={{ display: "grid", placeItems: "center", flexShrink: 0, width: 64, height: 64, borderRadius: 18, color: kind === "notes" ? "#6941c6" : kind === "records" ? "#1769c2" : "#087d75", background: kind === "notes" ? "#efe9ff" : kind === "records" ? "#e6f1ff" : "#e1f5ee" }}><DashboardCardIcon kind={kind} /></span>
+      <div style={{ minWidth: 0 }}><p>{title}</p><h2>{value}</h2><span style={{ overflowWrap: "anywhere" }}>{detail}</span></div>
+    </div>
   );
 
   if (onClick) {
@@ -2736,6 +1859,23 @@ function NewRecord({
   const [saving, setSaving] = useState(false);
   const [recordType, setRecordType] = useState<"note" | "vitals">("note");
 
+  // Use the caregiver's local clock (not UTC) for clinical recording time.
+  const localDateTime = () => {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return {
+      date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+    };
+  };
+  const localDateTimeFromDate = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+  const [recordingDate, setRecordingDate] = useState(() => localDateTime().date);
+  const [recordingTime, setRecordingTime] = useState(() => localDateTime().time);
+
+
   async function handleRecordSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
@@ -2753,6 +1893,23 @@ function NewRecord({
       alert("Please select a patient.");
       setSaving(false);
       return;
+    }
+
+    let selectedRecordedAt: string | undefined;
+    if (recordType === "vitals" || recordType === "note") {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(recordingDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(recordingTime)) {
+        alert("Please select a valid recording date and time.");
+        setSaving(false);
+        return;
+      }
+      const selected = new Date(`${recordingDate}T${recordingTime}:00`);
+      if (Number.isNaN(selected.getTime()) || selected.getTime() > Date.now() ||
+          localDateTimeFromDate(selected) !== `${recordingDate}T${recordingTime}`) {
+        alert("Please choose a valid recording time that is not in the future.");
+        setSaving(false);
+        return;
+      }
+      selectedRecordedAt = selected.toISOString();
     }
 
     const numberOrNull = (value: FormDataEntryValue | null) => {
@@ -2862,6 +2019,7 @@ function NewRecord({
         progress_note:
           recordType === "note" ? progressNote : null,
         recorded_by: userData.user.id,
+        recorded_at: selectedRecordedAt,
       });
 
     if (error) {
@@ -2879,6 +2037,9 @@ function NewRecord({
 
     await onRecordSaved();
     form.reset();
+    const refreshedTime = localDateTime();
+    setRecordingDate(refreshedTime.date);
+    setRecordingTime(refreshedTime.time);
     setSaving(false);
   }
 
@@ -2955,6 +2116,31 @@ function NewRecord({
             </button>
           </div>
         </div>
+
+            <div className="vitalGrid" style={{ marginBottom: 14 }}>
+              <div className="vitalCard">
+                <label htmlFor="recording-date">{recordType === "note" ? "Date of progress note *" : "Date vital signs were taken *"}</label>
+                <input
+                  id="recording-date"
+                  type="date"
+                  value={recordingDate}
+                  max={localDateTime().date}
+                  onChange={(event) => setRecordingDate(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="vitalCard">
+                <label htmlFor="recording-time">{recordType === "note" ? "Time of progress note *" : "Time vital signs were taken *"}</label>
+                <input
+                  id="recording-time"
+                  type="time"
+                  step="60"
+                  value={recordingTime}
+                  onChange={(event) => setRecordingTime(event.target.value)}
+                  required
+                />
+              </div>
+            </div>
 
         {recordType === "note" ? (
           <div className="field full">
@@ -4081,188 +3267,179 @@ function PatientTreatments({
 }) {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [medication, setMedication] = useState("");
+  const [dose, setDose] = useState("");
+  const [frequency, setFrequency] = useState("");
+  const [route, setRoute] = useState("");
+  const [startedOn, setStartedOn] = useState("");
+  const [endedOn, setEndedOn] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [showDemo, setShowDemo] = useState(false);
 
   async function loadTreatments() {
     setLoading(true);
-
+    setLoadError("");
     const { data, error } = await supabase
       .from("patient_treatments")
-      .select("id, patient_id, medication, created_at")
+      .select("id, patient_id, medication, dose, frequency, route, started_on, ended_on, created_at")
       .eq("patient_id", patientId)
+      .eq("organization_id", organizationId)
       .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Treatment loading error:", error);
-      setTreatments([]);
-      setLoading(false);
-      return;
-    }
-
-    setTreatments(
-      (data || []).map((item: any) => ({
+      setLoadError(error.message);
+    } else {
+      setTreatments((data || []).map((item) => ({
         id: item.id,
         patientId: item.patient_id,
         medication: item.medication,
+        dose: item.dose,
+        frequency: item.frequency,
+        route: item.route,
+        startedOn: item.started_on,
+        endedOn: item.ended_on,
         createdAt: item.created_at,
-      }))
-    );
-
+      })));
+    }
     setLoading(false);
   }
 
   useEffect(() => {
-    loadTreatments();
-  }, [patientId]);
+    void loadTreatments();
+  }, [patientId, organizationId]);
 
   async function addTreatment() {
     const cleanMedication = medication.trim();
-
     if (!cleanMedication) {
-      alert("Enter a treatment or medication first.");
+      alert("Enter the drug or treatment name first.");
       return;
     }
-
+    if (startedOn && endedOn && endedOn < startedOn) {
+      alert("End date cannot be earlier than start date.");
+      return;
+    }
     setSaving(true);
-
-    const {
-      data: userData,
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !userData.user) {
-      alert("Your login session could not be verified.");
-      setSaving(false);
-      return;
-    }
-
-    const { error } = await supabase
-      .from("patient_treatments")
-      .insert({
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        alert("Your login session could not be verified.");
+        return;
+      }
+      const { error } = await supabase.from("patient_treatments").insert({
         patient_id: patientId,
-        medication: cleanMedication,
-        created_by: userData.user.id,
         organization_id: organizationId,
+        created_by: userData.user.id,
+        medication: cleanMedication,
+        dose: dose.trim() || null,
+        frequency: frequency.trim() || null,
+        route: route.trim() || null,
+        started_on: startedOn || null,
+        ended_on: endedOn || null,
       });
-
-    if (error) {
-      alert(error.message);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      setMedication("");
+      setDose("");
+      setFrequency("");
+      setRoute("");
+      setStartedOn("");
+      setEndedOn("");
+      await loadTreatments();
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setMedication("");
-    await loadTreatments();
-    setSaving(false);
   }
 
   async function removeTreatment(id: string) {
     const confirmed = window.confirm(
-      "Remove this treatment from the patient's current treatment list?"
+      "Permanently delete this treatment entry? This cannot be undone."
     );
-
-    if (!confirmed) {
-      return;
-    }
-
+    if (!confirmed) return;
     const { error } = await supabase
       .from("patient_treatments")
       .delete()
-      .eq("id", id);
-
+      .eq("id", id)
+      .eq("patient_id", patientId)
+      .eq("organization_id", organizationId);
     if (error) {
       alert(error.message);
       return;
     }
-
     await loadTreatments();
   }
 
+  const fieldStyle = { minWidth: 0, width: "100%" };
+  const demoTreatments = [
+    ["Acepar", "1 tab", "BID", "PO", "2026-11-10", ""],
+    ["Paracetamol", "1 g", "TID", "PO", "2026-11-15", "2026-11-20"],
+    ["Amoxicillin", "500 mg", "TID", "PO", "2026-11-16", "2026-11-22"],
+    ["Omeprazole", "20 mg", "OD", "PO", "2026-11-15", ""],
+    ["Metformin", "500 mg", "BD", "PO", "2026-11-10", ""],
+    ["Ceftriaxone", "1 g", "OD", "IV", "2026-11-17", "2026-11-21"],
+    ["Amlodipine", "5 mg", "OD", "PO", "2026-11-01", ""],
+    ["Normal Saline 0.9%", "500 mL", "Once", "IV", "2026-11-18", "2026-11-18"],
+  ];
+
   return (
-    <div
-      style={{
-        marginTop: 24,
-        padding: 18,
-        border: "1px solid #dbe3e6",
-        borderRadius: 12,
-      }}
-    >
+    <div style={{ marginTop: 24, padding: 18, border: "1px solid #dbe3e6", borderRadius: 12 }}>
       <div className="panelHeader">
         <div>
           <h4>Patient Treatments</h4>
-          <p>
-            Current medication or treatment list for this patient.
-          </p>
+          <p>Recorded treatments for this patient. Verify medication details against the clinical order.</p>
         </div>
       </div>
 
-      {loading ? (
-        <p>Loading treatments...</p>
-      ) : treatments.length > 0 ? (
-        <div
-          style={{
-            display: "grid",
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          {treatments.map((treatment) => (
-            <div
-              key={treatment.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: "10px 12px",
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-              }}
-            >
-              <span>• {treatment.medication}</span>
-              <button
-                type="button"
-                className="tableButton dangerText"
-                onClick={() => removeTreatment(treatment.id)}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
+      {loading ? <p>Loading treatments...</p> : loadError ? (
+        <p role="alert">Could not load treatments: {loadError}</p>
       ) : (
-        <p style={{ marginBottom: 16 }}>
-          No treatments added yet.
-        </p>
+        <div style={{ overflowX: "auto", marginBottom: 16 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 730 }}>
+            <thead><tr>
+              <th>Drug</th><th>Dose</th><th>Frequency</th><th>Route</th>
+              <th>Started</th><th>Ended</th><th>Action</th>
+            </tr></thead>
+            <tbody>
+              {treatments.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.medication}</td><td>{t.dose || "—"}</td>
+                  <td>{t.frequency || "—"}</td><td>{t.route || "—"}</td>
+                  <td>{t.startedOn || "—"}</td><td>{t.endedOn || "—"}</td>
+                  <td><button type="button" className="tableButton dangerText" onClick={() => removeTreatment(t.id)}>Delete</button></td>
+                </tr>
+              ))}
+              {treatments.length === 0 && <tr><td colSpan={7}>No treatments recorded yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto",
-          gap: 10,
-          alignItems: "end",
-        }}
-      >
-        <div className="field">
-          <label>Add Treatment</label>
-          <input
-            type="text"
-            value={medication}
-            onChange={(event) => setMedication(event.target.value)}
-            placeholder="e.g. Tramadol p.o 50 mg TID"
-          />
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10, alignItems: "end" }}>
+        <div className="field"><label>Drug *</label><input style={fieldStyle} value={medication} onChange={(e) => setMedication(e.target.value)} placeholder="Medication name" /></div>
+        <div className="field"><label>Dose</label><input style={fieldStyle} value={dose} onChange={(e) => setDose(e.target.value)} placeholder="e.g. 1 tab" /></div>
+        <div className="field"><label>Frequency</label><input style={fieldStyle} value={frequency} onChange={(e) => setFrequency(e.target.value)} placeholder="e.g. BID" /></div>
+        <div className="field"><label>Route</label><input style={fieldStyle} value={route} onChange={(e) => setRoute(e.target.value)} placeholder="e.g. PO" /></div>
+        <div className="field"><label>Started</label><input style={fieldStyle} type="date" value={startedOn} onChange={(e) => setStartedOn(e.target.value)} /></div>
+        <div className="field"><label>Ended</label><input style={fieldStyle} type="date" min={startedOn || undefined} value={endedOn} onChange={(e) => setEndedOn(e.target.value)} /></div>
+        <button type="button" className="primaryButton" onClick={addTreatment} disabled={saving}>{saving ? "Adding..." : "+ Add Treatment"}</button>
+      </div>
 
-        <button
-          type="button"
-          className="primaryButton"
-          onClick={addTreatment}
-          disabled={saving}
-        >
-          {saving ? "Adding..." : "+ Add"}
+      <div style={{ marginTop: 20, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+        <button type="button" className="tableButton" onClick={() => setShowDemo(!showDemo)}>
+          {showDemo ? "Hide" : "Show"} sample medication table (demo only)
         </button>
+        {showDemo && <>
+          <p style={{ margin: "10px 0" }}><strong>DEMONSTRATION ONLY.</strong> These examples are not prescriptions and are never saved to the patient chart.</p>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 650 }}>
+              <thead><tr><th>Drug</th><th>Dose</th><th>Frequency</th><th>Route</th><th>Started</th><th>Ended</th></tr></thead>
+              <tbody>{demoTreatments.map((t, i) => <tr key={i}>{t.map((value, j) => <td key={j}>{value || "—"}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+        </>}
       </div>
     </div>
   );
@@ -5223,85 +4400,48 @@ const [role, setRole] = useState("caregiver");
     useState(false);
 
   async function getAccessToken() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    async function toggleUserStatus(
-  user: AppUser
-) {
-  const token = await getAccessToken();
-
-  if (!token) {
-    alert(
-      "Your login session could not be verified."
-    );
-    return;
-  }
-
-  const response = await fetch(
-    "/api/admin/users",
-    {
-      method: "PATCH",
-
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-
-      body: JSON.stringify({
-        userId: user.id,
-        active: !user.active,
-      }),
-    }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    alert(
-      data.error ||
-        "Could not change user status."
-    );
-    return;
-  }
-
-  await loadUsers();
-}
-
+    const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token || "";
+  }
+
+  // API failures can return HTML or an empty body, not JSON.
+  async function readUsersApiResponse(response: Response): Promise<any> {
+    const body = await response.text();
+    let data: any = {};
+    try {
+      data = body ? JSON.parse(body) : {};
+    } catch {
+      console.error("Users API returned non-JSON content", {
+        status: response.status,
+        contentType: response.headers.get("content-type"),
+        preview: body.slice(0, 500),
+      });
+      throw new Error(`Users API returned an invalid response (HTTP ${response.status}).`);
+    }
+    if (!response.ok) {
+      console.error("Users API request failed", response.status, data);
+      throw new Error(data?.error || `Users API request failed (HTTP ${response.status}).`);
+    }
+    return data;
   }
 
   async function loadUsers() {
     setLoadingUsers(true);
-
-    const token = await getAccessToken();
-
-    if (!token) {
-      alert("Your login session could not be verified.");
-      setLoadingUsers(false);
-      return;
-    }
-
-    const response = await fetch(
-      "/api/admin/users",
-      {
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Your login session could not be verified.");
+      const response = await fetch("/api/admin/users", {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      alert(data.error || "Could not load users.");
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await readUsersApiResponse(response);
+      setUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (error) {
+      console.error("Could not load users:", error);
+      alert(error instanceof Error ? error.message : "Could not load users.");
+    } finally {
       setLoadingUsers(false);
-      return;
     }
-
-    setUsers(data.users || []);
-    setLoadingUsers(false);
   }
 
   useEffect(() => {
@@ -5348,7 +4488,7 @@ const [role, setRole] = useState("caregiver");
       }
     );
 
-    const data = await response.json();
+    const data = await readUsersApiResponse(response);
 
     if (!response.ok) {
       alert(data.error || "Could not create user.");
@@ -5399,7 +4539,7 @@ async function toggleUserStatus(
     }
   );
 
-  const data = await response.json();
+  const data = await readUsersApiResponse(response);
 
   if (!response.ok) {
     alert(
@@ -5455,7 +4595,7 @@ async function editUserPhone(user: AppUser) {
       }),
     });
 
-    const data = await response.json();
+    const data = await readUsersApiResponse(response);
 
     if (!response.ok) {
       alert(data.error || "Could not update phone number.");
@@ -5513,7 +4653,7 @@ async function resetUserPassword(
     }
   );
 
-  const data = await response.json();
+  const data = await readUsersApiResponse(response);
 
   if (!response.ok) {
     alert(
