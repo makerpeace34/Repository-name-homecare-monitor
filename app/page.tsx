@@ -860,11 +860,17 @@ useEffect(() => {
 }, [profile.organization_id]);
 
 async function handleSignOut() {
+  if (signingOut) return;
   setSigningOut(true);
-
-  await supabase.auth.signOut();
-
-  setSigningOut(false);
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } catch (error) {
+    console.error("Sign out failed:", error);
+    alert("Could not sign out. Please try again.");
+  } finally {
+    setSigningOut(false);
+  }
 }
 
   const menuItems =
@@ -887,9 +893,9 @@ async function handleSignOut() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div>
-          <div className="logo">
+      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", boxSizing: "border-box" }}> 
+        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}>
+          <div className="logo" style={{ flexShrink: 0 }}>
             <div className="logoIcon">+</div>
 
             <div style={{ minWidth: 0 }}>
@@ -900,7 +906,7 @@ async function handleSignOut() {
             </div>
           </div>
 
-          <nav>
+          <nav style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin", paddingBottom: 12 }}>
             {menuItems.map((item) => (
               <button
                 key={item}
@@ -921,15 +927,15 @@ async function handleSignOut() {
           </nav>
         </div>
 
-        <div className="sidebarBottom">
+        <div className="sidebarBottom" style={{ flexShrink: 0, paddingTop: 12, paddingBottom: 12, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
           <div
             className="organizationBadge"
             style={{
               display: "grid",
               gap: 4,
               padding: "12px 0",
-              marginBottom: 10,
-              borderTop: "1px solid rgba(255,255,255,0.12)",
+              marginBottom: 12,
+              borderTop: "none",
             }}
           >
             <span
@@ -947,11 +953,11 @@ async function handleSignOut() {
             </strong>
           </div>
 
-          <div className="userMini">
-            <div className="avatar">{initials}</div>
+          <div className="userMini" style={{ display: "flex", alignItems: "center", minWidth: 0, gap: 10 }}>
+            <div className="avatar" style={{ flexShrink: 0 }}>{initials}</div>
 
-            <div>
-              <strong>{displayName}</strong>
+            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <strong title={displayName} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</strong>
               <span>
                 {profile.role === "admin" ? "Administrator" : "Caregiver"}
               </span>
@@ -959,11 +965,35 @@ async function handleSignOut() {
           </div>
 
           <button
+            type="button"
             className="logoutButton"
             onClick={handleSignOut}
             disabled={signingOut}
+            aria-label="Sign out of Healthy HomeCare"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              width: "100%",
+              minHeight: 44,
+              marginTop: 18,
+              padding: "11px 14px",
+              border: "1px solid rgba(255,255,255,0.35)",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.12)",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: signingOut ? "wait" : "pointer",
+              opacity: signingOut ? 0.7 : 1,
+            }}
           >
-            {signingOut ? "Signing Out..." : "Sign Out"}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 17l5-5-5-5M15 12H3" />
+              <path d="M12 3h6a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3h-6" />
+            </svg>
+            <span>{signingOut ? "Signing Out..." : "Sign Out"}</span>
           </button>
         </div>
       </aside>
@@ -1107,7 +1137,51 @@ function Dashboard({
 
   return (
     <>
-      <section className="welcome">
+      <style>{`
+        /* Dashboard-only compact layout: preserve existing colors and interactions. */
+        .main:has(.compactDashboardWelcome) .topbar {
+          padding-top: 12px !important;
+          padding-bottom: 12px !important;
+          margin-bottom: 16px !important;
+          min-height: 0 !important;
+        }
+        .compactDashboardWelcome {
+          padding: 20px 26px !important;
+          min-height: 0 !important;
+          margin-bottom: 16px !important;
+          gap: 14px;
+        }
+        .compactDashboardWelcome h2 { font-size: clamp(20px, 1.6vw, 26px) !important; margin: 0 0 6px !important; }
+        .compactDashboardWelcome p { margin: 0 !important; line-height: 1.4; }
+        .compactDashboardStats { gap: 14px !important; margin-bottom: 16px !important; }
+        .compactDashboardStats .statCard {
+          min-height: 0 !important;
+          height: auto !important;
+          padding: 16px !important;
+        }
+        .compactDashboardStats .statCard > div { gap: 12px !important; }
+        .compactDashboardStats .statCard > div > span:first-child {
+          width: 48px !important;
+          height: 48px !important;
+          border-radius: 14px !important;
+        }
+        .compactDashboardStats .statCard h2 { margin: 3px 0 !important; font-size: 30px !important; }
+        .compactDashboardStats .statCard p { margin: 0 !important; font-size: 15px !important; line-height: 1.35; }
+        .compactDashboardStats .statCard > div > div > span {
+          font-size: 14px !important;
+          line-height: 1.45 !important;
+          color: #526577 !important;
+        }
+        .compactDashboardContent { gap: 16px !important; }
+        .compactDashboardContent .panel { padding: 18px 20px !important; }
+        .compactDashboardContent .panelHeader { margin-bottom: 12px !important; }
+        @media (max-width: 800px) {
+          .compactDashboardWelcome { padding: 18px !important; }
+          .compactDashboardStats .statCard { padding: 14px !important; }
+          .compactDashboardContent .panel { padding: 16px !important; }
+        }
+      `}</style>
+      <section className="welcome compactDashboardWelcome">
         <div>
           <h2>Patient monitoring dashboard</h2>
           <p>
@@ -1124,7 +1198,7 @@ function Dashboard({
         </button>
       </section>
 
-      <section className="statsGrid" style={{ alignItems: "stretch" }}>
+      <section className="statsGrid compactDashboardStats" style={{ alignItems: "stretch" }}>
         <StatCard
           title="Active Patients"
           value={String(activePatients)}
@@ -1151,8 +1225,8 @@ function Dashboard({
         />
       </section>
 
-      <section className="contentGrid" style={{ alignItems: "start" }}>
-        <div className="panel largePanel" style={{ height: 365, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <section className="contentGrid compactDashboardContent" style={{ alignItems: "start" }}>
+        <div className="panel largePanel" style={{ height: 300, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div className="panelHeader">
             <div>
               <h3>Recent patient records</h3>
