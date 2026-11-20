@@ -893,8 +893,8 @@ async function handleSignOut() {
 
   return (
     <div className="app" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
-      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "100dvh", maxHeight: "100dvh", width: 300, minWidth: 300, flex: "0 0 300px", overflow: "hidden", boxSizing: "border-box" }}> 
-        <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}>
+      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "100dvh", maxHeight: "100dvh", width: 230, minWidth: 230, flex: "0 0 230px", overflowY: "auto", overflowX: "hidden", boxSizing: "border-box" }}> 
+        <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", minHeight: "auto" }}>
           <div className="logo" style={{ flexShrink: 0 }}>
             <div className="logoIcon">+</div>
 
@@ -906,7 +906,7 @@ async function handleSignOut() {
             </div>
           </div>
 
-          <nav style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin", paddingBottom: 12 }}>
+          <nav style={{ flex: "0 0 auto", minHeight: "auto", overflow: "visible", paddingBottom: 4 }}>
             {menuItems.map((item) => (
               <button
                 key={item}
@@ -927,14 +927,14 @@ async function handleSignOut() {
           </nav>
         </div>
 
-        <div className="sidebarBottom" style={{ flexShrink: 0, paddingTop: 12, paddingBottom: 12, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+        <div className="sidebarBottom" style={{ flexShrink: 0, marginTop: "auto", paddingTop: 6, paddingBottom: 8, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
           <div
             className="organizationBadge"
             style={{
               display: "grid",
               gap: 4,
-              padding: "12px 0",
-              marginBottom: 12,
+              padding: "4px 0",
+              marginBottom: 4,
               borderTop: "none",
             }}
           >
@@ -976,9 +976,9 @@ async function handleSignOut() {
               justifyContent: "center",
               gap: 10,
               width: "100%",
-              minHeight: 44,
-              marginTop: 18,
-              padding: "11px 14px",
+              minHeight: 40,
+              marginTop: 8,
+              padding: "8px 12px",
               border: "1px solid rgba(255,255,255,0.35)",
               borderRadius: 10,
               background: "rgba(255,255,255,0.12)",
@@ -1147,6 +1147,23 @@ function Dashboard({
           .app > .sidebar { position: relative !important; top: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; border-radius: 0 0 16px 16px !important; }
           .app > .main { width: 100% !important; }
         }
+        /* Fit all navigation items in the sidebar without an intrusive scrollbar. */
+        /* Compact the header and all six links so the account panel does not cover navigation. */
+        .app > .sidebar .logo { padding: 8px 12px 6px !important; margin-bottom: 2px !important; gap: 10px !important; }
+        .app > .sidebar .logo h2 { font-size: 20px !important; }
+        .app > .sidebar .logo span { font-size: 11px !important; }
+        .app > .sidebar nav { display: flex !important; flex-direction: column !important; flex: 0 0 auto !important; min-height: max-content !important; overflow: visible !important; gap: 1px !important; padding: 0 10px 2px !important; }
+        .app > .sidebar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
+        .app > .sidebar .navButton { box-sizing: border-box !important; flex: 0 0 39px !important; height: 39px !important; min-height: 39px !important; max-height: 39px !important; padding: 6px 10px !important; margin: 0 !important; gap: 9px !important; font-size: 14px !important; }
+        .app > .sidebar .sidebarBottom { flex-shrink: 0 !important; padding: 6px 12px 8px !important; }
+        .app > .sidebar .organizationBadge { padding: 4px 0 !important; margin-bottom: 4px !important; }
+        .app > .sidebar .userMini { margin-top: 4px !important; }
+        .app > .sidebar .logoutButton { margin-top: 8px !important; }
+        /* Scroll the entire sidebar on short screens; never clip menu links behind the account panel. */
+        
+        @media (max-width: 800px) {
+          .app > .sidebar nav { overflow: visible !important; }
+        }
         /* Dashboard-only compact layout: preserve existing colors and interactions. */
         /* Keep a visible gutter between the fixed sidebar and dashboard content. */
         .main:has(.compactDashboardWelcome) { padding-left: 32px !important; box-sizing: border-box; }
@@ -1160,15 +1177,15 @@ function Dashboard({
           min-height: 0 !important;
         }
         .compactDashboardWelcome {
-          padding: 20px 26px !important;
+          padding: 16px 22px !important;
           min-height: 0 !important;
-          margin-bottom: 16px !important;
-          gap: 14px;
+          margin-bottom: 14px !important;
+          gap: 12px;
         }
         .compactDashboardWelcome h2 { font-size: clamp(20px, 1.6vw, 26px) !important; margin: 0 0 6px !important; }
         .compactDashboardWelcome p { margin: 0 !important; line-height: 1.4; }
         /* Shared dashboard dimensions for administrator and caregiver. */
-        .compactDashboardStats { gap: 14px !important; margin-bottom: 16px !important; align-items: stretch !important; }
+        .compactDashboardStats { gap: 12px !important; margin-bottom: 14px !important; align-items: stretch !important; }
         .compactDashboardStats .statCard > div > div { min-width: 0; }
         .compactDashboardStats .statCard > div > div > span { overflow-wrap: normal !important; word-break: normal !important; }
         @media (max-width: 800px) {
@@ -1177,31 +1194,33 @@ function Dashboard({
         .compactDashboardStats .statCard {
           min-height: 0 !important;
           height: 100% !important;
-          padding: 16px !important;
+          padding: 12px 14px !important;
         }
         .compactDashboardStats .statCard > div { gap: 12px !important; }
         .compactDashboardStats .statCard > div > span:first-child {
-          width: 48px !important;
-          height: 48px !important;
+          width: 42px !important;
+          height: 42px !important;
           border-radius: 14px !important;
         }
-        .compactDashboardStats .statCard h2 { margin: 3px 0 !important; font-size: 30px !important; }
+        .compactDashboardStats .statCard h2 { margin: 3px 0 !important; font-size: 26px !important; }
         .compactDashboardStats .statCard p { margin: 0 !important; font-size: 15px !important; line-height: 1.35; }
         .compactDashboardStats .statCard > div > div > span {
           font-size: 14px !important;
           line-height: 1.45 !important;
           color: #526577 !important;
         }
-        .compactDashboardContent { gap: 16px !important; align-items: stretch !important; }
-        .compactDashboardContent > .panel { height: 390px !important; min-height: 0 !important; display: flex; flex-direction: column; }
-        .compactDashboardContent .tableWrapper { flex: 1; min-height: 0; overflow-x: auto; overflow-y: visible !important; }
-        .compactDashboardContent .dashboardNotePreview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-        .compactDashboardContent .panel { padding: 18px 20px !important; }
-        .compactDashboardContent .panelHeader { margin-bottom: 12px !important; }
+        .compactDashboardContent { gap: 14px !important; align-items: stretch !important; }
+        .compactDashboardContent > .panel { height: auto !important; min-height: 240px !important; display: flex; flex-direction: column; }
+        .compactDashboardContent .tableWrapper { flex: 1; min-height: 0; max-height: none !important; height: auto !important; overflow-x: auto; overflow-y: visible !important; }
+        .compactDashboardContent .dashboardNotePreview { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: normal !important; }
+        .compactDashboardContent .panel { padding: 16px 18px !important; }
+        .compactDashboardContent .panelHeader { margin-bottom: 10px !important; }
+        .compactDashboardContent .quickActions { gap: 10px !important; }
+        .compactDashboardContent .quickActions button { padding: 10px 12px !important; }
         @media (max-width: 800px) {
           .compactDashboardWelcome { padding: 18px !important; }
           .compactDashboardStats .statCard { padding: 14px !important; }
-          .compactDashboardContent .panel { padding: 16px !important; height: auto !important; min-height: 350px !important; }
+          .compactDashboardContent .panel { padding: 16px !important; height: auto !important; min-height: 0 !important; }
         }
       `}</style>
       <section className="welcome compactDashboardWelcome">
