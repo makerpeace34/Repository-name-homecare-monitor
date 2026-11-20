@@ -892,8 +892,8 @@ async function handleSignOut() {
         ];
 
   return (
-    <div className="app">
-      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", maxHeight: "100dvh", overflow: "hidden", boxSizing: "border-box" }}> 
+    <div className="app" style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
+      <aside className="sidebar" style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "100dvh", maxHeight: "100dvh", width: 300, minWidth: 300, flex: "0 0 300px", overflow: "hidden", boxSizing: "border-box" }}> 
         <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}>
           <div className="logo" style={{ flexShrink: 0 }}>
             <div className="logoIcon">+</div>
@@ -998,7 +998,7 @@ async function handleSignOut() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className="main" style={{ flex: "1 1 0%", minWidth: 0, width: "auto", marginLeft: 0, boxSizing: "border-box" }}>
         <header className="topbar">
           <div>
             <p className="eyebrow">HEALTHY HOMECARE</p>
@@ -1122,7 +1122,7 @@ function Dashboard({
       (record) =>
         record.note && record.note !== "—"
     )
-    .slice(0, 5);
+    .slice(0, 3);
 
   function shouldShowPatientName(
     record: VitalRecord,
@@ -1138,7 +1138,21 @@ function Dashboard({
   return (
     <>
       <style>{`
+        /* Keep the sidebar and main area in separate flex columns. */
+        .app { display: flex !important; }
+        .app > .sidebar { position: sticky !important; top: 0 !important; align-self: flex-start !important; left: auto !important; margin: 0 !important; flex-shrink: 0 !important; border-radius: 0 16px 16px 0 !important; }
+        .app > .main { position: relative !important; margin-left: 0 !important; min-width: 0 !important; flex: 1 1 0% !important; }
+        @media (max-width: 800px) {
+          .app { flex-direction: column !important; }
+          .app > .sidebar { position: relative !important; top: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; border-radius: 0 0 16px 16px !important; }
+          .app > .main { width: 100% !important; }
+        }
         /* Dashboard-only compact layout: preserve existing colors and interactions. */
+        /* Keep a visible gutter between the fixed sidebar and dashboard content. */
+        .main:has(.compactDashboardWelcome) { padding-left: 32px !important; box-sizing: border-box; }
+        @media (max-width: 800px) {
+          .main:has(.compactDashboardWelcome) { padding-left: 16px !important; padding-right: 16px !important; }
+        }
         .main:has(.compactDashboardWelcome) .topbar {
           padding-top: 12px !important;
           padding-bottom: 12px !important;
@@ -1153,10 +1167,16 @@ function Dashboard({
         }
         .compactDashboardWelcome h2 { font-size: clamp(20px, 1.6vw, 26px) !important; margin: 0 0 6px !important; }
         .compactDashboardWelcome p { margin: 0 !important; line-height: 1.4; }
-        .compactDashboardStats { gap: 14px !important; margin-bottom: 16px !important; }
+        /* Shared dashboard dimensions for administrator and caregiver. */
+        .compactDashboardStats { gap: 14px !important; margin-bottom: 16px !important; align-items: stretch !important; }
+        .compactDashboardStats .statCard > div > div { min-width: 0; }
+        .compactDashboardStats .statCard > div > div > span { overflow-wrap: normal !important; word-break: normal !important; }
+        @media (max-width: 800px) {
+          .app > .sidebar { width: 100% !important; min-width: 0 !important; flex-basis: auto !important; }
+        }
         .compactDashboardStats .statCard {
           min-height: 0 !important;
-          height: auto !important;
+          height: 100% !important;
           padding: 16px !important;
         }
         .compactDashboardStats .statCard > div { gap: 12px !important; }
@@ -1172,13 +1192,16 @@ function Dashboard({
           line-height: 1.45 !important;
           color: #526577 !important;
         }
-        .compactDashboardContent { gap: 16px !important; }
+        .compactDashboardContent { gap: 16px !important; align-items: stretch !important; }
+        .compactDashboardContent > .panel { height: 390px !important; min-height: 0 !important; display: flex; flex-direction: column; }
+        .compactDashboardContent .tableWrapper { flex: 1; min-height: 0; overflow-x: auto; overflow-y: visible !important; }
+        .compactDashboardContent .dashboardNotePreview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
         .compactDashboardContent .panel { padding: 18px 20px !important; }
         .compactDashboardContent .panelHeader { margin-bottom: 12px !important; }
         @media (max-width: 800px) {
           .compactDashboardWelcome { padding: 18px !important; }
           .compactDashboardStats .statCard { padding: 14px !important; }
-          .compactDashboardContent .panel { padding: 16px !important; }
+          .compactDashboardContent .panel { padding: 16px !important; height: auto !important; min-height: 350px !important; }
         }
       `}</style>
       <section className="welcome compactDashboardWelcome">
@@ -1225,8 +1248,8 @@ function Dashboard({
         />
       </section>
 
-      <section className="contentGrid compactDashboardContent" style={{ alignItems: "start" }}>
-        <div className="panel largePanel" style={{ height: 300, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <section className="contentGrid compactDashboardContent">
+        <div className="panel largePanel">
           <div className="panelHeader">
             <div>
               <h3>Recent patient records</h3>
@@ -1241,7 +1264,7 @@ function Dashboard({
             </button>
           </div>
 
-          <div className="tableWrapper" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto" }}>
+          <div className="tableWrapper">
             <table>
               <thead>
                 <tr>
@@ -1276,7 +1299,7 @@ function Dashboard({
                           wordBreak: "normal",
                         }}
                       >
-                        {record.note}
+                        <span className="dashboardNotePreview" title={record.note}>{record.note}</span>
                       </td>
                     </tr>
                   ))
@@ -1295,7 +1318,7 @@ function Dashboard({
           </div>
         </div>
 
-        <div className="panel" style={{ alignSelf: "start", height: "fit-content" }}>
+        <div className="panel">
           <div className="panelHeader">
             <div>
               <h3>Quick actions</h3>
